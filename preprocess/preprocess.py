@@ -3,6 +3,8 @@ import numpy as np
 import os
 from tqdm import tqdm
 from sklearn.preprocessing import LabelEncoder
+import pickle
+import time
 
 path = "../../data/train/"
 director = pd.read_csv(path+"directors.tsv",sep='\t')
@@ -12,7 +14,8 @@ train_rating = pd.read_csv(path+"train_ratings.csv",sep=',')
 writer = pd.read_csv(path+"writers.tsv",sep='\t')
 year = pd.read_csv(path+"years.tsv",sep='\t')
 
-def make_train_ratings(): 
+def make_train_ratings(train_rating):
+    t_s = time.time()
     # train_ratings.csv 파일 처리
     train_rating['date'] = pd.to_datetime(train_rating['time'], unit='s')
     train_rating = train_rating.sort_values(by = ['user','time'], axis = 0)
@@ -51,12 +54,12 @@ def make_train_ratings():
     trainyear_df['categorized_year_gap10'] = trainyear_df['release_year'].apply(release_year_mapping, args=(10,))
 
     trainyear_df['release_year'] = trainyear_df['release_year'].apply(int).apply(str)
-
+    print("complete train_ratings preprocessing, execution time {:.2f} s".format(time.time() - t_s))
     return trainyear_df
 
 
 def make_maniatic_feature() :
-
+    t_s = time.time()
     # 유저별로 favorite_genre','maniatic' 피처 생성
     # genre.csv를 불러와서 멀티핫인코딩
     temp = pd.get_dummies(genre) 
@@ -72,22 +75,25 @@ def make_maniatic_feature() :
     user_genre['favorite_genre'] = user_genre.iloc[:, 2:].idxmax(axis=1)
     user_genre['maniatic'] = user_genre.iloc[:, 2:].max(axis=1) / useritem_count['item']
     user_genre = user_genre[['user','favorite_genre','maniatic']]
-
+    print("complete user_genre preprocessing, execution time {:.2f} s".format(time.time() - t_s))
     return user_genre
 
-def labeling() : 
+def labeling(): 
 
     user_genre = make_maniatic_feature() 
-    trainyear_df = make_train_ratings()
+    trainyear_df = make_train_ratings(train_rating)
 
     # label Encoding
     le_genre = LabelEncoder()
-
     le_genre.fit(user_genre['favorite_genre'])
     user_genre['favorite_genre_label'] = le_genre.fit_transform(user_genre['favorite_genre'])
 
-    year_concat = pd.concat([trainyear_df['watch_year'], trainyear_df['release_year']],axis=0)
+    le_user = LabelEncoder()
+    le_user.fit(user_genre['user'])
+    user_genre['user_label'] = le_user.transform(user_genre['user'])
+    trainyear_df['user_label'] = le_user.transform(trainyear_df['user'])
 
+    year_concat = pd.concat([trainyear_df['watch_year'], trainyear_df['release_year']],axis=0)
     le_year = LabelEncoder()
     le_year.fit(year_concat)
     trainyear_df['watch_year_label'] = le_year.transform(trainyear_df['watch_year'])
@@ -104,6 +110,8 @@ def labeling() :
     trainyear_df['categorized_year_gap5_label'] = le_c_year_gap5.fit_transform(trainyear_df['categorized_year_gap5'])
     le_c_year_gap10 = LabelEncoder()
     trainyear_df['categorized_year_gap10_label'] = le_c_year_gap10.fit_transform(trainyear_df['categorized_year_gap10'])
+    return user_genre,trainyear_df
+
 def make_popular_director():
     director_concat_data = train_rating.merge(director, how='left',on=['item'])
     popular_director=director_concat_data['director'].value_counts()
@@ -232,6 +240,7 @@ def director_and_writer_labeling():
     return director_main,writer_main
 
 def director_and_writer_preprocess():
+    t_s = time.time()
     director_main,writer_main=director_and_writer_labeling()
     director_list = {}
     main_director_list = {}
@@ -245,13 +254,15 @@ def director_and_writer_preprocess():
         tmp = writer_main.iloc[i]
         writer_list[tmp['item_label']]=writer_list.get(tmp['item_label'],[])+[tmp['writer_label']]
         main_writer_list[tmp['item_label']]=[tmp['main_writer_label']]
+    print("complete director and writer preprocessing, execution time {:.2f} s".format(time.time() - t_s))
     return director_list,writer_list,main_director_list,main_writer_list
 
 def title_preprocess():
+    t_s = time.time()
     # title[title['title']=='War of the Worlds (2005)']
     # director[director['item']==34048]  # 스필버그 영화 => 더 유명한 우주전쟁
     # item_id가 64997인 녀석은 안 유명한 우주전쟁
-    title[title['item']==64997].title = 'War of the Worlds_B (2005)'
+    # title[title['item']==64997].title = 'War of the Worlds_B (2005)'
     title.at[1926, 'title'] = 'War of the Worlds_B (2005)'
     item_label = item_labeling()
     title['item_label'] = item_label.transform(title['item'])
@@ -262,9 +273,11 @@ def title_preprocess():
     for i in range(len(title)):
         tmp = title.iloc[i]
         title_list[tmp['item_label']]=[tmp['labeled_title']]
+    print("complete title preprocessing, execution time {:.2f} s".format(time.time() - t_s))
     return title_list
 
 def genre_preprocess():
+    t_s = time.time()
     genre_le=LabelEncoder()
     genre_label=genre_le.fit(genre['genre'])
     genre['genre_label'] = genre_le.transform(genre['genre'])
@@ -274,17 +287,19 @@ def genre_preprocess():
     for i in range(len(genre)):
         tmp = genre.iloc[i]
         genre_list[tmp['item_label']]=genre_list.get(tmp['item_label'],[])+[tmp['genre_label']]
+    print("complete genre preprocessing, execution time {:.2f} s".format(time.time() - t_s))
     return genre_list
 
 def total_preprocess():
+    t_s = time.time()
     total_dict = {}
-    title_list,writer_list,main_director_list,main_writer_list=director_and_writer_preprocess()
+    user_genre,train_edit = labeling()
+    director_list,writer_list,main_director_list,main_writer_list=director_and_writer_preprocess()
     title_list=title_preprocess()
     genre_list=genre_preprocess()
     for i in tqdm(range(len(train_edit))):
         user_dict={}
         user_tmp = train_edit.iloc[i]
-        year_tmp = year_edit.iloc[i]
         user=user_tmp['user_label']
         movie=user_tmp['item_label']
         user_dict['item'] = [movie]
@@ -295,17 +310,24 @@ def total_preprocess():
         user_dict['watch_gap'] = [user_tmp['watch_gap']]
         user_dict['favorite_genre_label'] = [user_genre[user_genre['user_label']==user]['favorite_genre_label'].values[0]]
         user_dict['maniatic'] = [user_genre[user_genre['user_label']==user]['maniatic'].values[0]]
-        user_dict['release_year_label'] = [year_tmp['release_year_label']]
-        user_dict['since_release'] = [year_tmp['since_release']]
-        user_dict['categorized_year_gap5_label'] = [year_tmp['categorized_year_gap5_label']]
-        user_dict['categorized_year_gap10_label'] = [year_tmp['categorized_year_gap10_label']]
-        user_dict['title_lable']=title_list[movie]
-        user_dict['director'] = director_list[movie]
-        user_dict['writer']= writer_list[movie]
-        user_dict['main_director']=main_director_list[movie]
-        user_dict['main_writer']=main_writer_list[movie]
-        user_dict['genre']=genre_list[movie]
+        user_dict['release_year_label'] = [user_tmp['release_year_label']]
+        user_dict['since_release'] = [user_tmp['since_release']]
+        user_dict['categorized_year_gap5_label'] = [user_tmp['categorized_year_gap5_label']]
+        user_dict['categorized_year_gap10_label'] = [user_tmp['categorized_year_gap10_label']]
+        user_dict['title_label']=title_list[movie]
+        user_dict['director_label'] = director_list[movie]
+        user_dict['writer_label']= writer_list[movie]
+        user_dict['main_director_label']=main_director_list[movie]
+        user_dict['main_writer_label']=main_writer_list[movie]
+        user_dict['genre_label']=genre_list[movie]
         
         total_dict[user] = total_dict.get(user,[])+[user_dict]
     with open("preprocessed_data.p","wb") as file:
         pickle.dump(total_dict,file)
+    print("complete preprocessing, execution time {:.2f} s".format(time.time() - t_s))
+
+def main():
+    total_preprocess()
+
+if __name__ == "__main__":
+    main()
