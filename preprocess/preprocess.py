@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import os
+from sklearn.preprocessing import LabelEncoder
+import pickle
 
 path = "../../data/train/"
 director = pd.read_csv(path+"directors.tsv",sep='\t')
@@ -72,3 +74,33 @@ def make_maniatic_feature() :
     user_genre = user_genre[['user','favorite_genre','maniatic']]
 
     return user_genre
+
+def labeling() : 
+
+    user_genre = make_maniatic_feature() 
+    trainyear_df = make_train_ratings()
+
+    # label Encoding
+    le_genre = LabelEncoder()
+
+    le_genre.fit(user_genre['favorite_genre'])
+    user_genre['favorite_genre_label'] = le_genre.fit_transform(user_genre['favorite_genre'])
+
+    year_concat = pd.concat([trainyear_df['watch_year'], trainyear_df['release_year']],axis=0)
+
+    le_year = LabelEncoder()
+    le_year.fit(year_concat)
+    trainyear_df['watch_year_label'] = le_year.transform(trainyear_df['watch_year'])
+
+    le_watch_month = LabelEncoder()
+    trainyear_df['watch_month_label'] = le_watch_month.fit_transform(trainyear_df['watch_month'])
+    le_watch_day = LabelEncoder()
+    trainyear_df['watch_day_label'] = le_watch_day.fit_transform(trainyear_df['watch_day'])
+    le_watch_hour = LabelEncoder()
+    trainyear_df['watch_hour_label'] = le_watch_hour.fit_transform(trainyear_df['watch_hour'])
+
+    trainyear_df['release_year_label'] = le_year.transform(trainyear_df['release_year'])
+    le_c_year_gap5 = LabelEncoder()
+    trainyear_df['categorized_year_gap5_label'] = le_c_year_gap5.fit_transform(trainyear_df['categorized_year_gap5'])
+    le_c_year_gap10 = LabelEncoder()
+    trainyear_df['categorized_year_gap10_label'] = le_c_year_gap10.fit_transform(trainyear_df['categorized_year_gap10'])
