@@ -234,20 +234,16 @@ def director_and_writer_labeling():
 def director_and_writer_preprocess():
     director_main,writer_main=director_and_writer_labeling()
     director_list = {}
+    main_director_list = {}
     for i in range(len(director_main)):
         tmp = director_main.iloc[i]
         director_list[tmp['item_label']]=director_list.get(tmp['item_label'],[])+[tmp['director_label']]
+        main_director_list[tmp['item_label']]=[tmp['main_director_label']]
     writer_list = {}
+    main_writer_list = {}
     for i in range(len(writer_main)):
         tmp = writer_main.iloc[i]
         writer_list[tmp['item_label']]=writer_list.get(tmp['item_label'],[])+[tmp['writer_label']]
-    main_director_list = {}
-    for i in range(len(dir_frame)):
-        tmp = dir_frame.iloc[i]
-        main_director_list[tmp['item_label']]=[tmp['main_director_label']]
-    main_writer_list = {}
-    for i in range(len(writer_frame)):
-        tmp = writer_frame.iloc[i]
         main_writer_list[tmp['item_label']]=[tmp['main_writer_label']]
     return director_list,writer_list,main_director_list,main_writer_list
 
