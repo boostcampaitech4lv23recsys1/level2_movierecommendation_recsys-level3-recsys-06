@@ -174,3 +174,48 @@ def title_preprocess():
         title_list[tmp['item_label']]=[tmp['labeled_title']]
     return title_list
 
+def genre_preprocess():
+    genre_le=LabelEncoder()
+    genre_label=genre_le.fit(genre['genre'])
+    genre['genre_label'] = genre_le.transform(genre['genre'])
+    item_label = item_labeling()
+    genre['item_label'] = item_label.transform(genre['item'])
+    genre_list={}
+    for i in range(len(genre)):
+        tmp = genre.iloc[i]
+        genre_list[tmp['item_label']]=genre_list.get(tmp['item_label'],[])+[tmp['genre_label']]
+    return genre_list
+
+def total_preprocess():
+    total_dict = {}
+    title_list,writer_list,main_director_list,main_writer_list=director_and_writer_preprocess()
+    title_list=title_preprocess()
+    genre_list=genre_preprocess()
+    for i in tqdm(range(len(train_edit))):
+        user_dict={}
+        user_tmp = train_edit.iloc[i]
+        year_tmp = year_edit.iloc[i]
+        user=user_tmp['user_label']
+        movie=user_tmp['item_label']
+        user_dict['item'] = [movie]
+        user_dict['watch_year_label'] = [user_tmp['watch_year_label']]
+        user_dict['watch_month_label'] = [user_tmp['watch_month_label']]
+        user_dict['watch_hour_label'] = [user_tmp['watch_hour_label']]
+        user_dict['watch_day_label'] = [user_tmp['watch_day_label']]
+        user_dict['watch_gap'] = [user_tmp['watch_gap']]
+        user_dict['favorite_genre_label'] = [user_genre[user_genre['user_label']==user]['favorite_genre_label'].values[0]]
+        user_dict['maniatic'] = [user_genre[user_genre['user_label']==user]['maniatic'].values[0]]
+        user_dict['release_year_label'] = [year_tmp['release_year_label']]
+        user_dict['since_release'] = [year_tmp['since_release']]
+        user_dict['categorized_year_gap5_label'] = [year_tmp['categorized_year_gap5_label']]
+        user_dict['categorized_year_gap10_label'] = [year_tmp['categorized_year_gap10_label']]
+        user_dict['title_lable']=title_list[movie]
+        user_dict['director'] = director_list[movie]
+        user_dict['writer']= writer_list[movie]
+        user_dict['main_director']=main_director_list[movie]
+        user_dict['main_writer']=main_writer_list[movie]
+        user_dict['genre']=genre_list[movie]
+        
+        total_dict[user] = total_dict.get(user,[])+[user_dict]
+    with open("preprocessed_data.p","wb") as file:
+        pickle.dump(total_dict,file)
