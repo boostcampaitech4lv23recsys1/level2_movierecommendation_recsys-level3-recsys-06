@@ -137,7 +137,7 @@ def director_and_writer_labeling():
     #     pickle.dump(total_label,file)
     return director_main,writer_main
 
-def make_director_and_writer_dictionary():
+def director_and_writer_preprocess():
     director_file,writer_file=director_and_writer_labeling()
     director_list = {}
     for i in range(len(director_main)):
@@ -156,4 +156,21 @@ def make_director_and_writer_dictionary():
         tmp = writer_frame.iloc[i]
         main_writer_list[tmp['item_label']]=[tmp['main_writer_label']]
     return director_list,writer_list,main_director_list,main_writer_list
+
+def title_preprocess():
+    # title[title['title']=='War of the Worlds (2005)']
+    # director[director['item']==34048]  # 스필버그 영화 => 더 유명한 우주전쟁
+    # item_id가 64997인 녀석은 안 유명한 우주전쟁
+    title[title['item']==64997].title = 'War of the Worlds_B (2005)'
+    title.at[1926, 'title'] = 'War of the Worlds_B (2005)'
+    item_label = item_labeling()
+    title['item_label'] = item_label.transform(title['item'])
+    title_le = LabelEncoder()
+    title_label=title_le.fit(title['title'])
+    title['title_label'] = title_le.transform(title['title'])
+    title_list={}
+    for i in range(len(title)):
+        tmp = title.iloc[i]
+        title_list[tmp['item_label']]=[tmp['labeled_title']]
+    return title_list
 
