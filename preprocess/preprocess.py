@@ -78,7 +78,7 @@ def make_maniatic_feature() :
     print("complete user_genre preprocessing, execution time {:.2f} s".format(time.time() - t_s))
     return user_genre
 
-def labeling(): 
+def user_genre_and_train_rating_preprocess(): 
 
     user_genre = make_maniatic_feature() 
     trainyear_df = make_train_ratings(train_rating)
@@ -293,7 +293,7 @@ def genre_preprocess():
 def total_preprocess():
     t_s = time.time()
     total_dict = {}
-    user_genre,train_edit = labeling()
+    user_genre,train_edit = user_genre_and_train_rating_preprocess()
     director_list,writer_list,main_director_list,main_writer_list=director_and_writer_preprocess()
     title_list=title_preprocess()
     genre_list=genre_preprocess()
@@ -322,9 +322,10 @@ def total_preprocess():
         user_dict['genre_label']=genre_list[movie]
         
         total_dict[user] = total_dict.get(user,[])+[user_dict]
+    print("complete preprocessing, execution time {:.2f} s".format(time.time() - t_s))
     with open("preprocessed_data.p","wb") as file:
         pickle.dump(total_dict,file)
-    print("complete preprocessing, execution time {:.2f} s".format(time.time() - t_s))
+    print("save file preprocessed_data.p successful, execution time {:.2f} s".format(time.time() - t_s))
 
 def main():
     total_preprocess()
