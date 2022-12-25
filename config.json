@@ -6,6 +6,9 @@
         "type": "MnistModel",
         "args": {}
     },
+    "n_fold": 5,
+    "neg_ratio": 3,
+    "using_features": ["director", "writer", "genre"],
     "data_loader": {
         "type": "MnistDataLoader",
         "args":{
