@@ -29,15 +29,20 @@ class StaticDataset(Dataset):
     def make_features(self, data_dict, idx, name):
         if name == 'director':
             max_len = self.director_maxlen
+            data = np.array(data_dict[idx][name]) + 1 # Multi-hot with padding
         elif name == 'writer':
             max_len = self.writer_maxlen
+            data = np.array(data_dict[idx][name]) + 1 # Multi-hot with padding
         elif name == 'genre':
             max_len = self.genre_maxlen
+            data = np.array(data_dict[idx][name]) + 1 # Multi-hot with padding
         else:
             max_len = 1
+            data = np.array(data_dict[idx][name])
+        
         data_features = np.zeros(max_len)
 
-        data_features[-len(data_dict[idx][name]):] = np.array(data_dict[idx][name])
+        data_features[-len(data_dict[idx][name]):] = data
         data_features = torch.tensor(data_features)
         
         return data_features
@@ -47,6 +52,8 @@ class StaticDataset(Dataset):
         neg_item_indices = np.random.choice(list(self.neg_items_dict[user_idx]), self.config['neg_ratio'])
         total_user_indices = np.array([user_idx] * (1 + self.config['neg_ratio']))
         total_item_indices = np.append(np.array([pos_item_idx]), neg_item_indices)
+        targets = [1] + ([0] * self.config['neg_ratio'])
+        targets = torch.tensor(targets)
 
         concat_list = []
         for i in range(self.config['neg_ratio'] + 1):
@@ -62,7 +69,7 @@ class StaticDataset(Dataset):
         features = torch.cat(concat_list, dim = 0)
         print("features shape:", features.shape)
 
-        return features
+        return features, targets
 
     
     def __len__(self):
