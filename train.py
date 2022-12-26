@@ -101,6 +101,7 @@ def main(config):
         #TODO: Validation은 negative sampling 과정이 없기 때문에 따로 짜기
 
 
+
         model = config.init_obj('arch', module_arch)
         device, device_ids = prepare_device(config['n_gpu'])
         model = model.to(device)
