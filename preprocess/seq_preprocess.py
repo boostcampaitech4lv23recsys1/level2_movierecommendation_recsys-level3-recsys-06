@@ -293,7 +293,7 @@ def total_preprocess(data_path):
     if not os.path.exists(data_path):
         os.makedirs(data_path)
 
-    if os.path.exists(data_path+'preprocessed_data.p'):
+    if os.path.exists(data_path+'/seq_preprocessed_data.p'):
         print('preprocessed_data already exists')
     
     else: 
@@ -337,10 +337,11 @@ def total_preprocess(data_path):
         labels = [user_label, item_label]
 
 
-        if not os.path.exists(data_path+"labels.p"):
-            os.remove(data_path+"labels.p")
-
-        with open(data_path+"labels.p","wb") as file:
+        if os.path.exists(data_path+"/seq_labels.p"):
+            os.remove(data_path+"/seq_labels.p")
+        
+        
+        with open(data_path+"/seq_labels.p","wb") as file:
             pickle.dump(labels, file)
         
 
