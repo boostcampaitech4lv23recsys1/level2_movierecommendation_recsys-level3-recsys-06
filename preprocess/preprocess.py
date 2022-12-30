@@ -22,7 +22,7 @@ class Preprocessor:
         self.direc_writer_encoder = label_encoders[0]
         self.user_encoder = label_encoders[1]
         self.genre_encoder = label_encoders[2]
-        self.item_encoder = label_encoder[3]
+        self.item_encoder = label_encoders[3]
         self.title_encoder = label_encoders[4]
 
     
@@ -36,7 +36,6 @@ class Preprocessor:
     def _preprocess_dataset(self):
         interaction_df, title_df = self._load_train_dataset()
 
-        #TODO: 전처리단에서 수행한 LabelEncoder 받아서 다시 수행해야한다.
         interaction_df['user'] = self.user_encoder.transform(interaction_df['user'])
         interaction_df['item'] = self.item_encoder.transform(interaction_df['item'])
         title_df['item'] = self.item_encoder.transform(title_df['item'])

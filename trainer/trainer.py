@@ -66,10 +66,8 @@ class Trainer(BaseTrainer):
             val_recallk_score = self._valid_epoch(epoch)
             print(f"[VALIDATION RECALL@K SCORE]: {val_recallk_score}")
 
-        #TODO: 여기에 FOLD별 early stopping 코드 추가한 후에 best에서 저장되도록
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
-        #TODO: log에서 뱉어내는 애는 train total loss를 뱉어내는 게 좋겠다. / validation recall score
         log = {'train_loss': train_loss.mean(), 'recall': val_recallk_score}
         return log
 

@@ -50,6 +50,7 @@ class StaticDataset(Dataset):
 
     def __getitem__(self, index):
         user_idx, pos_item_idx = self.data[index]
+        #Negative Sampling
         neg_item_indices = np.random.choice(list(self.neg_items_dict[user_idx]), self.config['neg_ratio'])
         total_user_indices = np.array([user_idx] * (1 + self.config['neg_ratio']))
         total_item_indices = np.append(np.array([pos_item_idx]), neg_item_indices)
@@ -57,6 +58,7 @@ class StaticDataset(Dataset):
         targets = torch.tensor(targets)
 
         concat_list = []
+        #Feature concat
         for i in range(self.config['neg_ratio'] + 1):
             data = torch.tensor([total_user_indices[i], total_item_indices[i]])
             for name in self.config['using_features']:
@@ -82,12 +84,11 @@ class StaticTestDataset(Dataset):
         우선 사용할 feature는 user, item, item의 director, item의 writer, item의 genre
         지금 구현해야할 게 너무 많아서 이거 먼저 짜놓고 생각하기
         """
-        # total_length = sum([len(neg_items_dict[x]) for x in neg_items_dict.keys()])
+        #기존에 interaction이 없는 케이스만 데이터셋으로 구성
         total_validset_list = []
         for user in tqdm(neg_items_dict.keys()):
-            item_seq = np.array(list(neg_items_dict[user])[:20])[:, np.newaxis]
-            user_seq = np.full(20, user)[:, np.newaxis]
-            # user_seq = np.full(len(neg_items_dict[user]), user)[:, np.newaxis]
+            item_seq = np.array(list(neg_items_dict[user]))[:, np.newaxis]
+            user_seq = np.full(len(neg_items_dict[user]), user)[:, np.newaxis]
             itemset = np.concatenate([user_seq, item_seq], axis = 1)
             total_validset_list.append(itemset)
         self.data = np.concatenate(total_validset_list, axis = 0)
@@ -127,6 +128,7 @@ class StaticTestDataset(Dataset):
         return data_features
 
     def __getitem__(self, index):
+        # Test용 데이터셋에서는 Negative Sampling 필요하지 않음.
         user_idx, item_idx = self.data[index]
         data = torch.tensor([user_idx, item_idx])
         for name in self.config['using_features']:

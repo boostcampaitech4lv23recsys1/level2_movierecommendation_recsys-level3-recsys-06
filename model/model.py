@@ -54,10 +54,6 @@ class DeepFM(BaseModel):
         self.mlp_layers = nn.Sequential(*mlp_layers)
 
     def fm(self, x):
-        # x : (batch_size, total_num_input)
-        
-        # embed_x = self.embedding(x)
-        #TODO: 아 지금 fm_y에서 64, 64가 되면서 브로드캐스팅이 되는구나
         fm_y = self.bias + torch.sum(torch.sum(x, dim = 2), dim=1, keepdim = True) #64 x 64
         square_of_sum = torch.sum(x, dim=1) ** 2 #64 x 64
         sum_of_square = torch.sum(x ** 2, dim=1)# 64 x 64
@@ -65,15 +61,12 @@ class DeepFM(BaseModel):
         return fm_y
     
     def mlp(self, x):
-        # embed_x = self.embedding(x)
-        
-        #위에서 self.embedding_dim에 갯수만큼 곱해줘서 정의해둠. 
         inputs = x.view(-1, self.embedding_dim)
         mlp_y = self.mlp_layers(inputs)
         return mlp_y
 
     def forward(self, x):
-        # x shape: [batch_size, user(:1), item(:2), 나머지 multi hot(2:16), (16:40), (40:)]
+        #하드코딩된 점을 여러 feature에 따라 수정할 수 있도록 변경하기.
         user_x = x[:, :1].long()
         item_x = x[:, 1:2].long()
         direc_x = x[:, 2:16].long()

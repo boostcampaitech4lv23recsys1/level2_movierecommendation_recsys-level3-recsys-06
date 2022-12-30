@@ -55,19 +55,9 @@ def main(config):
         train_df = interaction_df.iloc[train_index].reset_index(drop = True)
         valid_df = interaction_df.iloc[valid_index].reset_index(drop = True)
 
-        print(train_df.head(20))
-        print(valid_df.head(20))
-        print(train_df.index[:20])
-        print(valid_df.index[:20])
 
         print(f"[BEFORE CONCAT SHAPE] {train_df.shape}, {valid_df.shape}")
-        """
-        valid_for_train과 valid_for_test로 남기는 CODE
-        어차피 그 valid의 기준이 애매해질 바에는 학습 데이터셋을 더 남기는 게 나을듯
-        len(group) > 10 + config['neg_ratio']도 고려해봤지만, data loader에서 
-        negative sampling을 할 때, 차라리 중복되는 케이스가 있다하더라도 class imbalnace 해결 method 중 over sampling 느낌으로 
-        replace = True로 냅두는 게 낫겠다. metric이 정확한 게 나음. -> 사소한 차이
-        """
+
         valid_grouped = valid_df.groupby("user")
         valid_for_train_idx_list = set(valid_df.index)
         valid_for_test_idx_list = []
@@ -88,8 +78,6 @@ def main(config):
         train_df = pd.concat([train_df, valid_for_train]).reset_index(drop = True)
         valid_df = valid_df.reset_index(drop = True)
 
-        print(train_df[:25])
-        print(valid_df[:25])
         valid_grouped2 = valid_df.groupby('user')
         cnt = 0
         for name, group in valid_grouped2:
@@ -111,9 +99,8 @@ def main(config):
             neg_items_dict[user].update(neg_items)
 
         
-        print(train_df.sample(20))
         #data, neg_items_dict, user_dict, item_dict, config
-        trainset = StaticDataset(train_df.sample(len(train_df) // 1000), neg_items_dict, user_dict, item_dict, config)
+        trainset = StaticDataset(train_df, neg_items_dict, user_dict, item_dict, config)
         validset = StaticTestDataset(neg_items_dict, user_dict, item_dict, config)
 
         train_loader = config.init_obj('data_loader', module_data, trainset, config)
@@ -122,8 +109,6 @@ def main(config):
 
         train_batch = next(iter(train_loader))
         valid_batch = next(iter(valid_loader))
-        print(train_batch[0].shape, train_batch[1].shape)
-        print(valid_batch.shape)
 
 
         model = config.init_obj('arch', module_arch)
@@ -139,10 +124,6 @@ def main(config):
         optimizer = config.init_obj('optimizer', torch.optim, trainable_params)
         lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
 
-
-        #TODO: Kfold별로 Model weight data값이 다른 폴더에 저장되도록 하고, test inference에서 각 모델의 inference를 합쳐준다.
-        #TODO: model의 결과값에 prob과 user_idx, item_idx 매핑해주기. 그 후, user별로 prob이 높은 순서로 정렬한 다음, 나오는 item idx를 LabelEncoder의 reverse transform해주기.
-        #TODO: 테스트 inference할 때는 neg_items_dict를 새로 설정해주어야 한다.
         trainer = Trainer(model, criterion, metrics, optimizer,
                         config=config,
                         device=device,
