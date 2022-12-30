@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from base import BaseModel
@@ -30,7 +31,8 @@ class DeepFM(BaseModel):
 
         # Fm component의 constant bias term과 1차 bias term
         self.bias = nn.Parameter(torch.zeros((1,)))
-        self.fc = nn.Embedding(total_input_dim, 1)
+        # self.fc = nn.Embedding(total_input_dim, 1)
+        self.fc = nn.Linear(embedding_dim, 1, bias = False)
 
         #3653 3654 17
         self.user_embedding = nn.Embedding(31360, embedding_dim)
@@ -55,10 +57,10 @@ class DeepFM(BaseModel):
         # x : (batch_size, total_num_input)
         
         # embed_x = self.embedding(x)
-
-        fm_y = self.bias + torch.sum(self.fc(x), dim=1)
-        square_of_sum = torch.sum(embed_x, dim=1) ** 2 
-        sum_of_square = torch.sum(embed_x ** 2, dim=1) 
+        #TODO: 아 지금 fm_y에서 64, 64가 되면서 브로드캐스팅이 되는구나
+        fm_y = self.bias + torch.sum(torch.sum(x, dim = 2), dim=1, keepdim = True) #64 x 64
+        square_of_sum = torch.sum(x, dim=1) ** 2 #64 x 64
+        sum_of_square = torch.sum(x ** 2, dim=1)# 64 x 64
         fm_y += 0.5 * torch.sum(square_of_sum - sum_of_square, dim=1, keepdim=True)
         return fm_y
     
@@ -66,31 +68,30 @@ class DeepFM(BaseModel):
         # embed_x = self.embedding(x)
         
         #위에서 self.embedding_dim에 갯수만큼 곱해줘서 정의해둠. 
-        inputs = embed_x.view(-1, self.embedding_dim)
+        inputs = x.view(-1, self.embedding_dim)
         mlp_y = self.mlp_layers(inputs)
         return mlp_y
 
     def forward(self, x):
         # x shape: [batch_size, user(:1), item(:2), 나머지 multi hot(2:16), (16:40), (40:)]
-        user_x = x[:, :1]
-        item_x = x[:, 1:2]
-        direc_x = x[:, 2:16]
-        writer_x = x[:, 16:40]
-        genre_x = x[:, 40:]
+        user_x = x[:, :1].long()
+        item_x = x[:, 1:2].long()
+        direc_x = x[:, 2:16].long()
+        writer_x = x[:, 16:40].long()
+        genre_x = x[:, 40:].long()
         user_embed_x = self.user_embedding(user_x)
         item_embed_x = self.item_embedding(item_x)
-        direc_embed_x = self.director_multihot(direc_x)
-        writer_embed_x = self.writer_multihot(writer_x)
-        genre_embed_x = self.genre_multihot(genre_x)
+        direc_embed_x = self.director_multihot(direc_x).unsqueeze(1)
+        writer_embed_x = self.writer_multihot(writer_x).unsqueeze(1)
+        genre_embed_x = self.genre_multihot(genre_x).unsqueeze(1)
 
         embed_x = torch.cat([user_embed_x, item_embed_x, direc_embed_x, writer_embed_x, genre_embed_x], dim = 1)
         
         #fm component
-        fm_y = self.fm(x).squeeze(1)
-        
+        fm_y = self.fm(embed_x).squeeze(1)
         #deep component
-        mlp_y = self.mlp(x).squeeze(1)
+        mlp_y = self.mlp(embed_x).squeeze(1)
         
-        y = torch.sigmoid(fm_y + mlp_y)
+        y = torch.sigmoid(fm_y + mlp_y).squeeze()
         return y
 

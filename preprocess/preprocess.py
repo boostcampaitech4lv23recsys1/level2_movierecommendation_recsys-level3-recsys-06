@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+import pickle
 from sklearn.preprocessing import LabelEncoder
 
 
@@ -9,9 +10,21 @@ class Preprocessor:
         self.root_dir = "/opt/ml/input/data/train/"
         self.train_data_path = os.path.join(self.root_dir, "train_ratings.csv")
         self.title_data_path = os.path.join(self.root_dir, "titles.tsv")
+        self.asset_dir = "/opt/ml/level2_movierecommendation_recsys-level3-recsys-06/saved/asset"
+        self.label_encoders_path = os.path.join(self.asset_dir, "fm_labels.pkl")
+        with open(self.label_encoders_path, 'rb') as f:
+            label_encoders = pickle.load(f)
+        # 0: 감독/작가 라벨
+        # 1: 유저 라벨
+        # 2: 장르 라벨
+        # 3: 영화 라벨
+        # 4: 제목 라벨
+        self.direc_writer_encoder = label_encoders[0]
+        self.user_encoder = label_encoders[1]
+        self.genre_encoder = label_encoders[2]
+        self.item_encoder = label_encoder[3]
+        self.title_encoder = label_encoders[4]
 
-        self.user_encoder = LabelEncoder()
-        self.item_encoder = LabelEncoder()
     
     def _load_train_dataset(self):
         interaction_df = pd.read_csv(self.train_data_path, low_memory = False)
@@ -22,16 +35,18 @@ class Preprocessor:
     
     def _preprocess_dataset(self):
         interaction_df, title_df = self._load_train_dataset()
-        self.user_encoder.fit(interaction_df['user'])
-        self.item_encoder.fit(title_df['item'])
+
         #TODO: 전처리단에서 수행한 LabelEncoder 받아서 다시 수행해야한다.
         interaction_df['user'] = self.user_encoder.transform(interaction_df['user'])
         interaction_df['item'] = self.item_encoder.transform(interaction_df['item'])
         title_df['item'] = self.item_encoder.transform(title_df['item'])
         interaction_df = interaction_df[['user', 'item']]
         return interaction_df, title_df
-        
-        
+
+    def _preprocess_testset(self):
+        interaction_df, title_df = self._preprocess_dataset()
+        return interaction_df, title_df, self.user_encoder, self.item_encoder
+
 
 
 if __name__ == '__main__':

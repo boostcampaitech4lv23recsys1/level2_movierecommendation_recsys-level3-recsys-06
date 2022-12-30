@@ -1,17 +1,18 @@
+import pandas as pd
 import numpy as np
 import torch
 from torchvision.utils import make_grid
 from base import BaseTrainer
-from utils import inf_loop, MetricTracker
-
+from tqdm import tqdm
 
 class Trainer(BaseTrainer):
     """
     Trainer class
     """
     def __init__(self, model, criterion, metric_ftns, optimizer, config, device,
-                 data_loader, lr_scheduler=None, len_epoch=None):
-        super().__init__(model, criterion, metric_ftns, optimizer, config)
+                 data_loader, valid_loader, valid_target, 
+                 fold_num, lr_scheduler=None, len_epoch=None):
+        super().__init__(model, criterion, metric_ftns, optimizer, config, fold_num)
         self.config = config
         self.device = device
         self.data_loader = data_loader
@@ -22,14 +23,14 @@ class Trainer(BaseTrainer):
             # iteration-based training
             self.data_loader = inf_loop(data_loader)
             self.len_epoch = len_epoch
-        self.valid_data_loader = valid_data_loader
-        self.do_validation = self.valid_data_loader is not None
+        self.valid_loader = valid_loader
+        self.valid_target = valid_target
+        self.do_validation = self.valid_loader is not None
         self.lr_scheduler = lr_scheduler
         self.log_step = int(np.sqrt(data_loader.batch_size))
+        self.fold_num = fold_num
 
-        self.train_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
-        self.valid_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
-
+        self.metric = self.metric_ftns[0]
     def _train_epoch(self, epoch):
         """
         Training logic for an epoch
@@ -37,9 +38,14 @@ class Trainer(BaseTrainer):
         :param epoch: Integer, current training epoch.
         :return: A log that contains average loss and metric in this epoch.
         """
+        train_loss = np.array([])
+        epoch_iterator = tqdm(
+        self.data_loader, desc="Training (X / X Steps) (loss=X.X)", dynamic_ncols=True
+        )
         self.model.train()
-        self.train_metrics.reset()
-        for batch_idx, (data, target) in enumerate(self.data_loader):
+        for batch_idx, (data, target) in enumerate(epoch_iterator):
+            data = data.view(-1, data.shape[-1])
+            target = target.view(-1, 1).squeeze().float()
             data, target = data.to(self.device), target.to(self.device)
 
             self.optimizer.zero_grad()
@@ -47,57 +53,50 @@ class Trainer(BaseTrainer):
             loss = self.criterion(output, target)
             loss.backward()
             self.optimizer.step()
-
-            self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
-            self.train_metrics.update('loss', loss.item())
-            for met in self.metric_ftns:
-                self.train_metrics.update(met.__name__, met(output, target))
-
-            if batch_idx % self.log_step == 0:
-                self.logger.debug('Train Epoch: {} {} Loss: {:.6f}'.format(
-                    epoch,
-                    self._progress(batch_idx),
-                    loss.item()))
-                self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
-
-            if batch_idx == self.len_epoch:
-                break
-        log = self.train_metrics.result()
+            
+            current = batch_idx
+            total = self.len_epoch
+            epoch_iterator.set_description(
+            "[FOLD - %s] Training (%d / %d Steps) (loss=%2.5f)" % (self.fold_num, current, total, loss.item())
+            )
+            
+            train_loss = np.append(train_loss, loss.detach().cpu().numpy())
 
         if self.do_validation:
-            val_log = self._valid_epoch(epoch)
-            log.update(**{'val_'+k : v for k, v in val_log.items()})
+            val_recallk_score = self._valid_epoch(epoch)
+            print(f"[VALIDATION RECALL@K SCORE]: {val_recallk_score}")
 
+        #TODO: 여기에 FOLD별 early stopping 코드 추가한 후에 best에서 저장되도록
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
+        #TODO: log에서 뱉어내는 애는 train total loss를 뱉어내는 게 좋겠다. / validation recall score
+        log = {'train_loss': train_loss.mean(), 'recall': val_recallk_score}
         return log
 
     def _valid_epoch(self, epoch):
         """
+        return recall score @k
         Validate after training an epoch
 
         :param epoch: Integer, current training epoch.
         :return: A log that contains information about validation
         """
         self.model.eval()
-        self.valid_metrics.reset()
+        infer_list = []
         with torch.no_grad():
-            for batch_idx, (data, target) in enumerate(self.valid_data_loader):
-                data, target = data.to(self.device), target.to(self.device)
-
+            for data in tqdm(self.valid_loader):
+                data = data.to(self.device)
                 output = self.model(data)
-                loss = self.criterion(output, target)
+                prob = output.detach().cpu().numpy()[:, np.newaxis]
+                info = data[:, :2].detach().cpu().numpy()
+                infos = np.concatenate([info, prob], axis = 1)
+                infer_list.append(infos)
+        inference = np.concatenate(infer_list, axis = 0)
+        print(inference.shape)
+        inference = pd.DataFrame(inference, columns = ['user', 'item', 'prob'])
+        inference = inference.sort_values(by = 'prob', ascending = False)
 
-                self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
-                self.valid_metrics.update('loss', loss.item())
-                for met in self.metric_ftns:
-                    self.valid_metrics.update(met.__name__, met(output, target))
-                self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
-
-        # add histogram of model parameters to the tensorboard
-        for name, p in self.model.named_parameters():
-            self.writer.add_histogram(name, p, bins='auto')
-        return self.valid_metrics.result()
+        return self.metric(inference, self.valid_target)
 
     def _progress(self, batch_idx):
         base = '[{}/{} ({:.0f}%)]'
