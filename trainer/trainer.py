@@ -40,7 +40,7 @@ class Trainer(BaseTrainer):
         """
         train_loss = np.array([])
         epoch_iterator = tqdm(
-        self.data_loader, desc="Training (X / X Steps) (loss=X.X)", dynamic_ncols=True
+        self.data_loader, desc="Training (X / X Steps) (loss=X.X)", dynamic_ncols=True, mininterval = 1
         )
         self.model.train()
         for batch_idx, (data, target) in enumerate(epoch_iterator):
