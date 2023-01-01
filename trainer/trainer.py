@@ -79,6 +79,7 @@ class Trainer(BaseTrainer):
         :param epoch: Integer, current training epoch.
         :return: A log that contains information about validation
         """
+        #TODO: BERT4REC
         self.model.eval()
         infer_list = []
         with torch.no_grad():
