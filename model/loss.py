@@ -10,4 +10,4 @@ def bce_loss(output, target):
 
 
 def ce_loss(output, target):
-    return F.cross_entropy(output, target)
+    return F.cross_entropy(output, target, ignore_index = 0)
