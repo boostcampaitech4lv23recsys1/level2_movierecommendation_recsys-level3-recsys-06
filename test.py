@@ -16,6 +16,8 @@ from data_loader.context_data_loader import StaticDataset, StaticTestDataset
 from collections import defaultdict
 from pathlib import Path
 from preprocess.preprocess import Preprocessor
+
+
 def main(config):
     asset_dir = "/opt/ml/level2_movierecommendation_recsys-level3-recsys-06/saved/asset"
     save_dir = "/opt/ml/level2_movierecommendation_recsys-level3-recsys-06/saved/output"

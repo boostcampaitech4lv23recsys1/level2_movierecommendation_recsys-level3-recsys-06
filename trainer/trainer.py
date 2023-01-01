@@ -10,8 +10,8 @@ class Trainer(BaseTrainer):
     Trainer class
     """
     def __init__(self, model, criterion, metric_ftns, optimizer, config, device,
-                 data_loader, valid_loader, valid_target, 
-                 fold_num, lr_scheduler=None, len_epoch=None):
+                 data_loader, valid_loader, valid_target,
+                 fold_num, pos_items_dict, lr_scheduler=None, len_epoch=None):
         super().__init__(model, criterion, metric_ftns, optimizer, config, fold_num)
         self.config = config
         self.device = device
@@ -29,6 +29,7 @@ class Trainer(BaseTrainer):
         self.lr_scheduler = lr_scheduler
         self.log_step = int(np.sqrt(data_loader.batch_size))
         self.fold_num = fold_num
+        self.pos_items_dict = pos_items_dict
 
         self.metric = self.metric_ftns[0]
     def _train_epoch(self, epoch):
@@ -44,8 +45,9 @@ class Trainer(BaseTrainer):
         )
         self.model.train()
         for batch_idx, (data, target) in enumerate(epoch_iterator):
-            data = data.view(-1, data.shape[-1])
-            target = target.view(-1, 1).squeeze().float()
+            if self.config['name'] == 'DeepFM':
+                data = data.view(-1, data.shape[-1])
+                target = target.view(-1, 1).squeeze().float()
             data, target = data.to(self.device), target.to(self.device)
 
             self.optimizer.zero_grad()

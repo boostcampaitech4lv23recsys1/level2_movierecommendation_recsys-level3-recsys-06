@@ -13,7 +13,7 @@ import data_loader.data_loaders as module_data
 import model.loss as module_loss
 import model.metric as module_metric
 import model.model as module_arch
-from data_loader.context_data_loader import StaticDataset, StaticTestDataset
+from data_loader.context_data_loader import StaticDataset, StaticTestDataset, SeqTrainDataset, SeqTestDataset
 from torch.utils.data import DataLoader
 
 from parse_config import ConfigParser
@@ -85,7 +85,6 @@ def main(config):
         print(f"[CNT]: {cnt}")
         print(f"[AFTER CONCAT SHAPE] {train_df.shape}, {valid_df.shape}")
 
-        #TODO: negative items user
         pos_items_dict = collections.defaultdict(set)
         neg_items_dict = collections.defaultdict(set)
         grouped = train_df.groupby('user')
@@ -99,9 +98,13 @@ def main(config):
             neg_items_dict[user].update(neg_items)
 
         
-        #data, neg_items_dict, user_dict, item_dict, config
-        trainset = StaticDataset(train_df, neg_items_dict, user_dict, item_dict, config)
-        validset = StaticTestDataset(neg_items_dict, user_dict, item_dict, config)
+        if config['name'] == 'DeepFM':
+            trainset = StaticDataset(train_df, neg_items_dict, user_dict, item_dict, config)
+            validset = StaticTestDataset(neg_items_dict, user_dict, item_dict, config)
+        elif config['name'] == 'Bert4Rec':
+            #TODO: Sequential Dataset으로 이름변경하기.
+            trainset = SeqTrainDataset()
+            validset = SeqTestDataset()
 
         train_loader = config.init_obj('data_loader', module_data, trainset, config)
         # train_loader = DataLoader(trainset, batch_size=32, shuffle=True, num_workers=4)
@@ -131,7 +134,8 @@ def main(config):
                         valid_loader = valid_loader,
                         valid_target = valid_df,
                         lr_scheduler=lr_scheduler,
-                        fold_num = idx + 1)
+                        fold_num = idx + 1,
+                        pos_items_dict = pos_items_dict)
 
         trainer.train()
 
