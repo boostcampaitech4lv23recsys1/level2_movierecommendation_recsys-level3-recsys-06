@@ -17,7 +17,7 @@ class SeqTrainDataset(Dataset):
 
     def __getitem__(self, user): 
         # iterator를 구동할 때 사용됩니다.
-        seq = self.user_train[user]
+        seq = np.array(self.user_train[user]) + 1
         tokens = []
         labels = []
         for s in seq:
@@ -61,11 +61,11 @@ class SeqTestDataset(Dataset):
 
     def __getitem__(self, user): 
         # iterator를 구동할 때 사용됩니다.
-        tokens = self.user_train[user]
+        tokens = (np.array(self.user_train[user]) + 1).tolist()
         tokens.append(self.num_item+1)
         tokens = tokens[-self.max_len:]
         mask_len = self.max_len - len(tokens)
 
         # zero padding
         tokens = [0] * mask_len + tokens
-        return torch.LongTensor(user),torch.LongTensor(tokens)
+        return torch.LongTensor([user]), torch.LongTensor(tokens)

@@ -1,9 +1,13 @@
 import pandas as pd
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torchvision.utils import make_grid
 from base import BaseTrainer
 from tqdm import tqdm
+import time
+
+INF = int(1e9)
 
 class Trainer(BaseTrainer):
     """
@@ -52,6 +56,8 @@ class Trainer(BaseTrainer):
 
             self.optimizer.zero_grad()
             output = self.model(data)
+            output = output.view(-1, output.size(-1)) #[Batch_size, seq_len, 6808] -> [Batch_size * seq_len, 6808]
+            target = target.view(-1)
             loss = self.criterion(output, target)
             loss.backward()
             self.optimizer.step()
@@ -65,7 +71,10 @@ class Trainer(BaseTrainer):
             train_loss = np.append(train_loss, loss.detach().cpu().numpy())
 
         if self.do_validation:
-            val_recallk_score = self._valid_epoch(epoch)
+            if self.config['name'] == 'DeepFM':
+                val_recallk_score = self._valid_epoch(epoch)
+            elif self.config['name'] == 'Bert4Rec':
+                val_recallk_score = self._valid_epoch_seq(epoch)
             print(f"[VALIDATION RECALL@K SCORE]: {val_recallk_score}")
 
         if self.lr_scheduler is not None:
@@ -73,15 +82,14 @@ class Trainer(BaseTrainer):
         log = {'train_loss': train_loss.mean(), 'recall': val_recallk_score}
         return log
 
+
     def _valid_epoch(self, epoch):
         """
         return recall score @k
         Validate after training an epoch
-
         :param epoch: Integer, current training epoch.
         :return: A log that contains information about validation
         """
-        #TODO: BERT4REC
         self.model.eval()
         infer_list = []
         with torch.no_grad():
@@ -97,7 +105,47 @@ class Trainer(BaseTrainer):
         inference = pd.DataFrame(inference, columns = ['user', 'item', 'prob'])
         inference = inference.sort_values(by = 'prob', ascending = False)
 
-        return self.metric(inference, self.valid_target)
+
+    def _valid_epoch_seq(self, epoch):
+        """
+        return recall score @k
+        Validate after training an epoch
+
+        :param epoch: Integer, current training epoch.
+        :return: A log that contains information about validation
+        """
+        #TODO: BERT4REC
+        self.model.eval()
+        infer_list = []
+        with torch.no_grad():
+            for user, tokens in tqdm(self.valid_loader):
+                user = user.numpy()
+                tokens = tokens.to(self.device)
+                output = self.model(tokens)
+                #output shape: [Batch_size, max_len, 6808] -> output[:, -1, :]
+                output = output[:, -1, :]
+                output = F.softmax(output, dim = -1)
+                output = output.detach().cpu().numpy()
+                for idx in range(self.valid_loader.batch_size):
+                    user_num = int(user[idx].item())
+                    user_probs = output[idx]
+                    infos = []
+                    for item_num in range(6808):
+                        if item_num == 0:
+                            continue
+                        if (item_num - 1) in self.pos_items_dict[user_num]:
+                            infos.append(np.array([user_num, item_num-1, -INF])[np.newaxis, :])
+                        else:
+                            infos.append(np.array([user_num, item_num-1, user_probs[item_num]])[np.newaxis, :])
+                    temp = np.concatenate(infos, axis = 0)
+                    infer_list.append(temp)
+        inference = np.concatenate(infer_list, axis = 0)
+        inference = pd.DataFrame(inference, columns = ['user', 'item', 'prob'])
+        inference = inference.sort_values(by = 'prob', ascending = False)
+        grouped = inference.groupby('user')
+        top_10 = grouped.head(10)
+
+        return self.metric(top_10, self.valid_target)
 
     def _progress(self, batch_idx):
         base = '[{}/{} ({:.0f}%)]'

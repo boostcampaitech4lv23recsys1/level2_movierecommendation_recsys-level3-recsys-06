@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
+import math
 from base import BaseModel
 
 
@@ -90,13 +92,15 @@ class DeepFM(BaseModel):
 
 
 class ScaledDotProductAttention(nn.Module):
-    def __init__(self, hidden_units, dropout_rate):
+    def __init__(self, hidden_units, dropout_rate, num_heads):
         super(ScaledDotProductAttention, self).__init__()
         self.hidden_units = hidden_units
         self.dropout = nn.Dropout(dropout_rate) # dropout rate
+        self.num_heads = num_heads
+        self.d_k = self.hidden_units // self.num_heads
 
     def forward(self, Q, K, V, mask):
-        attn_score = torch.matmul(Q, K.transpose(2, 3)) / math.sqrt(self.hidden_units)
+        attn_score = torch.matmul(Q, K.transpose(2, 3)) / math.sqrt(self.d_k)
         attn_score = attn_score.masked_fill(mask == 0, -1e9)  # 유사도가 0인 지점은 -infinity로 보내 softmax 결과가 0이 되도록 함
         attn_dist = self.dropout(F.softmax(attn_score, dim=-1))  # attention distribution
         output = torch.matmul(attn_dist, V)  # dim of output : batchSize x num_head x seqLen x hidden_units
@@ -108,25 +112,30 @@ class MultiHeadAttention(nn.Module):
         super(MultiHeadAttention, self).__init__()
         self.num_heads = num_heads # head의 수
         self.hidden_units = hidden_units
-        
+        self.d_k = self.hidden_units // self.num_heads
         # query, key, value, output 생성을 위해 Linear 모델 생성
         self.W_Q = nn.Linear(hidden_units, hidden_units, bias=False)
         self.W_K = nn.Linear(hidden_units, hidden_units, bias=False)
         self.W_V = nn.Linear(hidden_units, hidden_units, bias=False)
         self.W_O = nn.Linear(hidden_units, hidden_units, bias=False)
 
-        self.attention = ScaledDotProductAttention(hidden_units, dropout_rate) # scaled dot product attention module을 사용하여 attention 계산
+        self.attention = ScaledDotProductAttention(hidden_units, dropout_rate, self.num_heads) # scaled dot product attention module을 사용하여 attention 계산
         self.dropout = nn.Dropout(dropout_rate) # dropout rate
         self.layerNorm = nn.LayerNorm(hidden_units, 1e-6) # layer normalization
 
     def forward(self, enc, mask):
+        #enc = [Batch_size, seq_len, hidden_units]
         residual = enc # residual connection을 위해 residual 부분을 저장
         batch_size, seqlen = enc.size(0), enc.size(1)
         
         # Query, Key, Value를 (num_head)개의 Head로 나누어 각기 다른 Linear projection을 통과시킴
-        Q = self.W_Q(enc).view(batch_size, seqlen, self.num_heads, self.hidden_units) 
-        K = self.W_K(enc).view(batch_size, seqlen, self.num_heads, self.hidden_units)
-        V = self.W_V(enc).view(batch_size, seqlen, self.num_heads, self.hidden_units)
+        # Q = self.W_Q(enc).view(batch_size, seqlen, self.num_heads, self.hidden_units) 
+        # K = self.W_K(enc).view(batch_size, seqlen, self.num_heads, self.hidden_units)
+        # V = self.W_V(enc).view(batch_size, seqlen, self.num_heads, self.hidden_units)
+
+        Q = self.W_Q(enc).view(batch_size, -1, self.num_heads, self.d_k) 
+        K = self.W_K(enc).view(batch_size, -1, self.num_heads, self.d_k)
+        V = self.W_V(enc).view(batch_size, -1, self.num_heads, self.d_k)
 
         # Head별로 각기 다른 attention이 가능하도록 Transpose 후 각각 attention에 통과시킴
         Q, K, V = Q.transpose(1, 2), K.transpose(1, 2), V.transpose(1, 2)
@@ -171,7 +180,7 @@ class BERT4RecBlock(nn.Module):
 
 
 class BERT4Rec(nn.Module):
-    def __init__(self, num_user, num_item, hidden_units, num_heads, num_layers, max_len, dropout_rate, device):
+    def __init__(self, device, num_user, num_item, hidden_units, num_heads, num_layers, max_len, dropout_rate):
         super(BERT4Rec, self).__init__()
 
         self.num_user = num_user
@@ -190,12 +199,12 @@ class BERT4Rec(nn.Module):
         self.out = nn.Linear(hidden_units, num_item + 1) # TODO3: 예측을 위한 output layer를 구현해보세요. (num_item 주의)
 
     def forward(self, log_seqs):
-        seqs = self.item_emb(torch.LongTensor(log_seqs).to(self.device))
+        seqs = self.item_emb(log_seqs)
         positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
         seqs += self.pos_emb(torch.LongTensor(positions).to(self.device))
         seqs = self.emb_layernorm(self.dropout(seqs))
 
-        mask = torch.BoolTensor(log_seqs > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device) # mask for zero pad
+        mask = torch.BoolTensor(log_seqs.detach().cpu().numpy() > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device) # mask for zero pad
         for block in self.blocks:
             seqs, attn_dist = block(seqs, mask)
         out = self.out(seqs)

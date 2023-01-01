@@ -1,7 +1,8 @@
 from torchvision import datasets, transforms
 from base import BaseDataLoader
 from torch.utils.data import DataLoader
-from .context_data_loader import StaticDataset, StaticTestDataset, SeqTrainDataset, SeqTestDataset
+from .context_data_loader import StaticDataset, StaticTestDataset
+from .sequential_data_loader import SeqTrainDataset, SeqTestDataset
 
 
 class MnistDataLoader(BaseDataLoader):
@@ -33,7 +34,7 @@ class FMDataLoader(DataLoader):
         super().__init__(**self.init_kwargs)
 
 
-class FMDataLoader(DataLoader):
+class SeqDataLoader(DataLoader):
     """
     FM data loading demo using BaseDataLoader
     """
@@ -41,7 +42,7 @@ class FMDataLoader(DataLoader):
         
         self.init_kwargs = {
             'dataset' : dataset,
-            'batch_size': batch_size
+            'batch_size': batch_size,
             'shuffle': isinstance(dataset, SeqTrainDataset),
             'num_workers': num_workers
         }

@@ -1,6 +1,7 @@
 import os
 import argparse
 import torch
+import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 import pickle
@@ -12,10 +13,13 @@ import model.metric as module_metric
 import model.model as module_arch
 from parse_config import ConfigParser
 from data_loader.context_data_loader import StaticDataset, StaticTestDataset
+from data_loader.sequential_data_loader import SeqTrainDataset, SeqTestDataset
 
 from collections import defaultdict
 from pathlib import Path
 from preprocess.preprocess import Preprocessor
+
+INF = int(1e9)
 
 
 def main(config):
@@ -56,11 +60,23 @@ def main(config):
     for fold_num in range(1, config['n_fold']+1):
         total_length = [len(neg_items_dict[user]) for user in neg_items_dict.keys()]
         total_length = sum(total_length)
+        
+        if config['name'] == 'DeepFM':
+            testset = StaticTestDataset(neg_items_dict, user_dict, item_dict, config)
+        elif config['name'] == 'Bert4Rec':
+            users = defaultdict(list)
+            for u, i in zip(train_df['user'], train_df['item']):
+                users[u].append(i)
+            testset = SeqTestDataset(users, 31360, 6807, config['arch']['args']['max_len'], config['mask_prob'])
 
-        testset = StaticTestDataset(neg_items_dict, user_dict, item_dict, config)
         test_loader = config.init_obj('data_loader', module_data, testset, config)
         #FOLD별로 모델을 load하여 inference
-        model = config.init_obj('arch', module_arch)
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if config['name'] == 'DeepFM':
+            model = config.init_obj('arch', module_arch)
+        elif config['name'] == 'Bert4Rec':
+            model = config.init_obj('arch', module_arch, device)
+
         cpath = os.path.join(config['trainer']['save_dir'], 'models', config['name'], f"FOLD-{fold_num}", f"{config['name']}-best_model.pth")
         checkpoint = torch.load(cpath)
         state_dict = checkpoint['state_dict']
@@ -68,22 +84,37 @@ def main(config):
         if config['n_gpu'] > 1:
             model = torch.nn.DataParallel(model)
         model.load_state_dict(state_dict)
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = model.to(device)
         model.eval()
 
         infer_list = []
         nfold_probs = np.zeros((total_length, config['n_fold']))
         with torch.no_grad():
-            for data in tqdm(test_loader):
-                data = data.to(device)
-                output = model(data)
-                prob = output.detach().cpu().numpy()[:, np.newaxis]
-                info = data[:, :2].detach().cpu().numpy()
-                infos = np.concatenate([info, prob], axis = 1)
-                infer_list.append(infos)
+            for user, tokens in tqdm(test_loader):
+                user = user.numpy()
+                tokens = tokens.to(device)
+                output = model(tokens)
 
+                output = output[:, -1, :]
+                output = F.softmax(output, dim = -1)
+                output = output.detach().cpu().numpy()
+
+                for idx in range(test_loader.batch_size):
+                    user_num = int(user[idx].item())
+                    user_probs = output[idx]
+                    infos = []
+                    for item_num in range(6808):
+                        if item_num == 0:
+                            continue
+                        if (item_num - 1) in pos_items_dict[user_num]:
+                            infos.append(np.array([user_num, item_num-1, -INF])[np.newaxis, :])
+                        else:
+                            infos.append(np.array([user_num, item_num-1, user_probs[item_num]])[np.newaxis, :])
+                    temp = np.concatenate(infos, axis = 0)
+                    infer_list.append(temp)
         inference = np.concatenate(infer_list, axis = 0)
+        indices = np.where(inference[:, 2] > 0)[0]
+        inference = inference[indices]
         probs = inference[:, 2]
         nfold_probs[:, fold_num-1] = probs
 
@@ -92,6 +123,7 @@ def main(config):
             inference[:, 2] = nfold_prob
             inference = pd.DataFrame(inference, columns = ['user', 'item', 'prob'])
             inference = inference.sort_values(by = 'prob', ascending = False)
+
 
     grouped = inference.groupby('user')
     top_10 = grouped.head(10)

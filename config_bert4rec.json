@@ -5,14 +5,20 @@
     "arch": {
         "type": "BERT4Rec",
         "args": {
-            "input_dims": 5,
-            "embedding_dim": 128,
-            "mlp_dims": [128, 128, 64]
+            "num_user": 31360,
+            "num_item": 6807, 
+            "hidden_units": 64,
+            "num_heads": 4,
+            "num_layers": 2,
+            "max_len": 128,
+            "dropout_rate": 0.2
         }
     },
     "n_fold": 5,
+
+    "mask_prob": 0.4,
     "data_loader": {
-        "type": "FMDataLoader",
+        "type": "SeqDataLoader",
         "args":{
             "batch_size": 64,
             "shuffle": true,
@@ -23,7 +29,7 @@
         "type": "Adam",
         "args":{
             "lr": 3e-4,
-            "weight_decay": 1e-5,
+            "weight_decay": 1e-2,
             "amsgrad": true
         }
     },

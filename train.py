@@ -13,7 +13,8 @@ import data_loader.data_loaders as module_data
 import model.loss as module_loss
 import model.metric as module_metric
 import model.model as module_arch
-from data_loader.context_data_loader import StaticDataset, StaticTestDataset, SeqTrainDataset, SeqTestDataset
+from data_loader.context_data_loader import StaticDataset, StaticTestDataset
+from data_loader.sequential_data_loader import SeqTrainDataset, SeqTestDataset
 from torch.utils.data import DataLoader
 
 from parse_config import ConfigParser
@@ -97,25 +98,33 @@ def main(config):
             neg_items = set([x for x in all_items if x not in pos_items_dict[user]])
             neg_items_dict[user].update(neg_items)
 
-        
+        if config['name'] == "Bert4Rec":
+            users = collections.defaultdict(list)
+            for u, i in zip(train_df['user'], train_df['item']):
+                users[u].append(i)
+
         if config['name'] == 'DeepFM':
             trainset = StaticDataset(train_df, neg_items_dict, user_dict, item_dict, config)
             validset = StaticTestDataset(neg_items_dict, user_dict, item_dict, config)
         elif config['name'] == 'Bert4Rec':
             #TODO: Sequential Dataset으로 이름변경하기.
-            trainset = SeqTrainDataset()
-            validset = SeqTestDataset()
+            trainset = SeqTrainDataset(users, 31360, 6807, config['arch']['args']['max_len'], config['mask_prob'])
+            validset = SeqTestDataset(users, 31360, 6807, config['arch']['args']['max_len'], config['mask_prob'])
 
         train_loader = config.init_obj('data_loader', module_data, trainset, config)
         # train_loader = DataLoader(trainset, batch_size=32, shuffle=True, num_workers=4)
         valid_loader = config.init_obj('data_loader', module_data, validset, config)
 
         train_batch = next(iter(train_loader))
+        print(type(train_batch))
         valid_batch = next(iter(valid_loader))
 
 
-        model = config.init_obj('arch', module_arch)
         device, device_ids = prepare_device(config['n_gpu'])
+        if config['name'] == 'DeepFM':
+            model = config.init_obj('arch', module_arch)
+        elif config['name'] == 'Bert4Rec':
+            model = config.init_obj('arch', module_arch, device)
         model = model.to(device)
 
         # get function handles of loss and metrics
