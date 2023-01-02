@@ -1,3 +1,6 @@
 data/
 output/
+saved_model/
+wandb/
+__pycache__/
 .DS_Store

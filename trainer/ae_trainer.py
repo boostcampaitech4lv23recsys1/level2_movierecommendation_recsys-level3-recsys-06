@@ -9,6 +9,7 @@ from base import BaseTrainer
 from utils import inf_loop, MetricTracker
 from model.metric import recall_at_k_batch
 
+import wandb
 
 
 class AETrainer:
@@ -36,6 +37,7 @@ class AETrainer:
     def train(self):
         last_train_loss = 0.0
         best_score = float('-inf')
+        best_epoch = -1
 
         for epoch in range(1, self.n_epochs+1):
             epoch_stime = time.time()
@@ -49,10 +51,12 @@ class AETrainer:
 
             recall_epoch = recall_at_k_batch(X_preds, heldouts, 10)
             if recall_epoch > best_score:
-                torch.save(self.model.state_dict(), f'saved_model/{self.config["model_name"]}/lr{self.config["lr"]}_dropout{self.config["dropout_rate"]}_epoch{self.config["n_epochs"]}.pth')
+                best_epoch = epoch
+                torch.save(self.model.state_dict(), f'saved_model/{self.config["model_name"]}/lr{self.config["lr"]}_dropout{self.config["dropout_rate"]}_epoch{self.config["n_epochs"]}_fold{self.fold}.pth')
                 best_score = recall_epoch
                 print("[Model Saved] This Epoch is the best at metric so far!")
-
+            
+            wandb.log({"epoch": epoch, "recall_epoch": recall_epoch, "best_epoch": best_epoch, "train_loss": train_loss})
             print(f'[Recall for Epoch {epoch}] {recall_epoch}')
             print(f'Train loss: {train_loss:.5f} | Train loss Imporved: {round(last_train_loss-train_loss, 4)}')  
             print(f'epoch에 약 {round(time.time()-epoch_stime,1)}초 걸렸습니다', '\n')
@@ -60,10 +64,12 @@ class AETrainer:
             last_train_loss = train_loss
         
         # 지금까지 있었던 가장 좋은 모델을 모델에 불러줍니다.
-        # if recall_epoch != best_score:
-        print("[Best Model Loaded]")
-        self.model = deepcopy(self.model)
-        self.model.load_state_dict(torch.load(f'saved_model/{self.config["model_name"]}/lr{self.config["lr"]}_dropout{self.config["dropout_rate"]}_epoch{self.config["n_epochs"]}.pth'))
+        if epoch != best_epoch:
+            print("[Best Model Loaded]")
+            print(f"Best Epoch {best_epoch}")
+            self.model = deepcopy(self.model)
+            self.model.load_state_dict(torch.load(f'saved_model/{self.config["model_name"]}/lr{self.config["lr"]}_dropout{self.config["dropout_rate"]}_epoch{self.config["n_epochs"]}_fold{self.fold}.pth'))
+            recall_epoch = best_score
 
         return recall_epoch, X_preds, heldouts
 
