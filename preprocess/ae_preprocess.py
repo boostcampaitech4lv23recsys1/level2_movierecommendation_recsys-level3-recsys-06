@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+import pickle
 
 from scipy import sparse
 import os
@@ -52,11 +53,18 @@ def split_train_test_proportion(data, test_prop=0.2):
         np.random.shuffle(temp_list)
 
         # samples에는 5개의 5등분된 샘플 인덱스가 담겨있게 됨
-        for i in range(5):
-            start = i * (n_items_u//5)
-            end = min(start + (n_items_u//5), n_items_u)
-            sample = temp_list[start:end]
-            samples.append(sample)
+        if n_items_u >= 50:
+            for i in range(5):
+                start = i * 10
+                end = min(start + 10, n_items_u)
+                sample = temp_list[start:end]
+                samples.append(sample)
+        else:
+            for i in range(5):
+                start = i * (n_items_u//5)
+                end = min(start + (n_items_u//5), n_items_u)
+                sample = temp_list[start:end]
+                samples.append(sample)
 
         if n_items_u >= 5:  # 5개 이상인 애들에 대해서만 적용해줌 
 
@@ -73,7 +81,6 @@ def split_train_test_proportion(data, test_prop=0.2):
         else:
             tr_list[i].append(group)
 
-    breakpoint()
     for i in range(5):
         data_tr.append(pd.concat(tr_list[i]))
         data_te.append(pd.concat(te_list[i]))
@@ -91,6 +98,10 @@ def ae_preprocess(data_path):
     np.random.seed(6)
     ae_data_path = os.path.join(data_path, 'ae_data')
     
+    if os.path.exists(ae_data_path+'/train_5.csv'):
+        print("preprocessed alreay done")
+        return
+
     if not os.path.exists(ae_data_path):
         os.makedirs(ae_data_path)
     
@@ -112,7 +123,7 @@ def ae_preprocess(data_path):
 
     show2id = dict((sid, i) for (i, sid) in enumerate(sorted(unique_sid)))  # 영화 라벨링 딕셔너리 생성 (순서대로)
     profile2id = dict((pid, i) for (i, pid) in enumerate(sorted(unique_uid)))  # 유저 라벨링 딕셔너리 생성 (순서대로)
-
+    
 
     # 유일한 유저 아이디를 기록해놓음
     with open(os.path.join(ae_data_path, 'unique_sid.txt'), 'w') as f: # 왜 기록하는 걸까? 랜덤한 순서를 간직하기 위해서?
@@ -130,6 +141,12 @@ def ae_preprocess(data_path):
 
         test_data = numerize(valid_dfs[i], profile2id, show2id)
         test_data.to_csv(os.path.join(ae_data_path, f'test_{i+1}.csv'), index=False)
+
+    with open(ae_data_path+"/item_label.pkl", "wb") as file:
+        pickle.dump(show2id, file)
+
+    with open(ae_data_path+"/user_label.pkl", "wb") as file:
+        pickle.dump(profile2id, file)
 
     print("preprocessing Done!")
 
