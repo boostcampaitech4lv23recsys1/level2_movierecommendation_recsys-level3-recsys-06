@@ -38,7 +38,7 @@ class MultiDAE(nn.Module):
     https://arxiv.org/abs/1802.05814
     """
 
-    def __init__(self, p_dims, q_dims=None, dropout=0.5):
+    def __init__(self, config, p_dims, q_dims=None, dropout=0.5):
         super(MultiDAE, self).__init__()
         self.p_dims = p_dims
         if q_dims:
@@ -52,6 +52,7 @@ class MultiDAE(nn.Module):
         self.layers = nn.ModuleList([nn.Linear(d_in, d_out) for
             d_in, d_out in zip(self.dims[:-1], self.dims[1:])])
         self.drop = nn.Dropout(dropout)
+        self.config = config if config else None
         
         self.init_weights()
     
@@ -89,7 +90,7 @@ class MultiVAE(nn.Module):
     https://arxiv.org/abs/1802.05814
     """
 
-    def __init__(self, p_dims, q_dims=None, dropout=0.5):
+    def __init__(self, config, p_dims, q_dims=None, dropout=0.5):
         super(MultiVAE, self).__init__()
         self.p_dims = p_dims  # [n_itmes, 600, 200]
         if q_dims:
@@ -108,6 +109,11 @@ class MultiVAE(nn.Module):
         
         self.drop = nn.Dropout(dropout)
         self.init_weights()
+
+        self.total_anneal_steps = config['total_anneal_steps']
+        self.anneal_cap = config['anneal_cap']
+
+
     
     def forward(self, input):
         mu, logvar = self.encode(input)
@@ -166,6 +172,11 @@ class MultiVAE(nn.Module):
             # Normal Initialization for Biases
             layer.bias.data.normal_(0.0, 0.001)
 
+    def get_anneal(self, update_count):
+        if self.total_anneal_steps > 0:
+            return min(self.anneal_cap, 1. * update_count / self.total_anneal_steps)
+        else:
+            return self.anneal_cap
 
 
 
@@ -267,7 +278,7 @@ class Encoder(nn.Module):
     
 
 class RecVAE(nn.Module):
-    def __init__(self, hidden_dim, latent_dim, input_dim):
+    def __init__(self, hidden_dim, latent_dim, input_dim, config):
         super(RecVAE, self).__init__()
         
         self.encoder = Encoder(hidden_dim, latent_dim, input_dim)

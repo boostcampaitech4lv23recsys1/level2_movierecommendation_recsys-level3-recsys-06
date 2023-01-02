@@ -27,7 +27,7 @@ from model.loss import loss_function_dae, loss_function_vae
 import model.metric as module_metric
 import model.model as module_arch
 from model.metric import Recall_at_k_batch
-from model.model import MultiDAE, MultiVAE
+from model.model import MultiDAE, MultiVAE, RecVAE
 
 from data_loader.ae_dataloader import AETrainDataSet, AETestDataSet, ae_data_load, get_labels
 import data_loader.data_loaders as module_data

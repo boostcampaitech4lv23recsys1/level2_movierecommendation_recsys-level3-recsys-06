@@ -23,7 +23,7 @@ def top_k_acc(output, target, k=3):
     return correct / len(target)
 
 
-def Recall_at_k_batch(X_pred, heldout_batch, k=10):
+def recall_at_k_batch(X_pred, heldout_batch, k=10):
     batch_users = X_pred.shape[0]
 
     idx = bn.argpartition(-X_pred, k, axis=1)  # 큰 요소 k개의 인덱스가 앞에 오도록 해서 인덱스를 뽑아냄
