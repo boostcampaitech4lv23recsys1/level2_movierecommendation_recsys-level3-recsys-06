@@ -181,9 +181,9 @@ class MultiVAE(nn.Module):
 
 
 class EASE:
-	def __init__(self, _lambda):
-    	self.B = None
-    	self._lambda = _lambda
+    def __init__(self, _lambda):
+        self.B = None
+        self._lambda = _lambda
     
     def train(self, X):
         G = X.T @ X  # G = X'X
@@ -194,14 +194,19 @@ class EASE:
         self.B = P / -np.diag(P)  # - P_{ij} / P_{jj} if i ≠ j
         min_dim = min(*self.B.shape)  
         self.B[range(min_dim), range(min_dim)] = 0  # 대각행렬 원소만 0으로 만들어주기 위해
+        
     
     def forward(self, user_row):
         return user_row @ self.B
 
 
+
+
 '''
 RecVAE
 '''
+
+
 def swish(x):
     return x.mul(torch.sigmoid(x))
 

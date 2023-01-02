@@ -1,17 +1,26 @@
 import pickle
 import pandas as pd
+import numpy as np
 from scipy import sparse
 
 import torch
 import csv
-import tqdm
+from tqdm import tqdm
 
 
 def make_prediction_file(output_path, inference_results, config, total_recall_at_k, user_label, item_label):
-    model_name, lr, n_epochs, dropout_rate, batch_size = config['model_name'], config['lr'], config['n_epochs'], config['dropout_rate'], config['batch_size']
+    model_name = config['model_name']
+    if model_name == 'EASE':
+        EASE_lambda = config['EASE_lambda']
 
-    with open(output_path + f'/mat_{RecVAE}_{round(lr,4)}_epoch{n_epochs}_{total_recall_at_k}_dropout{dropout_rate}_batch_{batch_size}.pkl', "wb") as file:
-        pickle.dump(inference_results, file)
+        with open(output_path + f'/mat_{model_name}_lambda{EASE_lambda}.pkl', "wb") as file:
+            pickle.dump(inference_results, file)
+
+    else:    
+        lr, n_epochs, dropout_rate, batch_size = config['lr'], config['n_epochs'], config['dropout_rate'], config['batch_size']
+
+        with open(output_path + f'/mat_{model_name}_{round(lr,4)}_epoch{n_epochs}_{total_recall_at_k}_dropout{dropout_rate}_batch_{batch_size}.pkl', "wb") as file:
+            pickle.dump(inference_results, file)
 
 
 def make_inference_data_and_mark(config, root_data, user_label, item_label):
@@ -27,23 +36,32 @@ def make_inference_data_and_mark(config, root_data, user_label, item_label):
 
 
 def write_submission_file(output_path, final_10, config, total_recall_at_k, user_label, item_label):
-    model_name, lr, n_epochs, dropout_rate, batch_size = config['model_name'], config['lr'], config['n_epochs'], config['dropout_rate'], config['batch_size']
-
+    model_name = config['model_name']
     label_to_user = {v: k for k, v in user_label.items()}
     label_to_item = {v: k for k, v in item_label.items()}
 
-    with open(output_path + f'/sub_{model_name}_{lr}_epoch{n_epochs}_{total_recall_at_k}_dropout{dropout_rate}_batch_{batch_size}.csv', 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
+    if model_name == 'EASE':
+        EASE_lambda = config['EASE_lambda']
+        with open(output_path + f'/mat_{model_name}_lambda{EASE_lambda}.pkl', "w") as csvfile:
+            writer = csv.writer(csvfile)
+            write_csv(writer, final_10, label_to_user, label_to_item)
+
+    else:
+        lr, n_epochs, dropout_rate, batch_size = config['lr'], config['n_epochs'], config['dropout_rate'], config['batch_size']
+        with open(output_path + f'/sub_{model_name}_{lr}_epoch{n_epochs}_{total_recall_at_k}_dropout{dropout_rate}_batch_{batch_size}.csv', 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            write_csv(writer, final_10, label_to_user, label_to_item)
     
-        # Write the header row
-        writer.writerow(['user', 'item'])
-        
-        # Write the data rows
-        print("Creating submission file: 31360 users")
-        for i, row in tqdm(enumerate(final_10)):
-            u_n = label_to_user[i]
-            for j in row:
-                writer.writerow([u_n, label_to_item[j]])
+
+def write_csv(writer, final_10, label_to_user, label_to_item):
+    writer.writerow(['user', 'item'])
+    
+    # Write the data rows
+    print("Creating submission file: 31360 users")
+    for i, row in tqdm(enumerate(final_10)):
+        u_n = label_to_user[i]
+        for j in row:
+            writer.writerow([u_n, label_to_item[j]])
 
 
 def get_loaders(tr_data, te_data, config):
