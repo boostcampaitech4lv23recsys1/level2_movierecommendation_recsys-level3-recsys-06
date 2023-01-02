@@ -3,16 +3,18 @@ import torch
 from torchvision.utils import make_grid
 from base import BaseTrainer
 from utils import inf_loop, MetricTracker
+from sklearn.model_selection import KFold, train_test_split
 
 
 class GBDTTrainer():
     """
     Trainer class
     """
-    def __init__(self, config, total_df, user_num):
+    def __init__(self, config, total_df, test_df, user_num):
         self.config = config
         self.probs = np.zeros((5,user_num))
         self.total_df = total_df
+        self.test_df = test_df
     
 
     def _train_epoch(self, epoch):
@@ -22,41 +24,12 @@ class GBDTTrainer():
         :param epoch: Integer, current training epoch.
         :return: A log that contains average loss and metric in this epoch.
         """
-        
+        #index로 나누고,
+        kf = KFold(n_splits = 5, shuffle = True, random_state = 42)
+        for idx, (train_index, valid_index) in enumerate(kf.split(self.total_df.index)):
+            #negative sampling을 fold별로 다르게 뽑히게
+            print(f"[FOLD: {idx + 1}] catboost")
+            #train,valid 어떻게 나눌지 - 
+            #fold 별로 확률 값 평균
 
-    def _valid_epoch(self, epoch):
-        """
-        Validate after training an epoch
-
-        :param epoch: Integer, current training epoch.
-        :return: A log that contains information about validation
-        """
-        self.model.eval()
-        self.valid_metrics.reset()
-        with torch.no_grad():
-            for batch_idx, (data, target) in enumerate(self.valid_data_loader):
-                data, target = data.to(self.device), target.to(self.device)
-
-                output = self.model(data)
-                loss = self.criterion(output, target)
-
-                self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
-                self.valid_metrics.update('loss', loss.item())
-                for met in self.metric_ftns:
-                    self.valid_metrics.update(met.__name__, met(output, target))
-                self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
-
-        # add histogram of model parameters to the tensorboard
-        for name, p in self.model.named_parameters():
-            self.writer.add_histogram(name, p, bins='auto')
-        return self.valid_metrics.result()
-
-    def _progress(self, batch_idx):
-        base = '[{}/{} ({:.0f}%)]'
-        if hasattr(self.data_loader, 'n_samples'):
-            current = batch_idx * self.data_loader.batch_size
-            total = self.data_loader.n_samples
-        else:
-            current = batch_idx
-            total = self.len_epoch
-        return base.format(current, total, 100.0 * current / total)
+            

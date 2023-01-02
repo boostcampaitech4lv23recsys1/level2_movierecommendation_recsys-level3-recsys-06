@@ -7,7 +7,7 @@ import model.loss as module_loss
 import model.metric as module_metric
 import model.model as module_arch
 from parse_config import ConfigParser
-from trainer import Trainer
+# from trainer import Trainer
 from utils import prepare_device
 from preprocess.preprocess import Preprocessor
 import os
@@ -46,16 +46,12 @@ def main(config):
     
 
     print("==========negative sampling 생성===========")
-    
-
     neg_df = preprocessor._make_negative_sampling(neg_ratio=0.3, threshold=1000, sampling_mode="popular") #0.3, 1000 -> 1532251
     total_df = pd.concat([interaction_df, neg_df])
+    test_df = preprocessor._make_test_dataset()
 
-    if config['name'] == "GBDT":
-        trainer = GBDTTrainer(config, total_df, len(user_df))
-
-
-
+    # if config['name'] == "GBDT":
+        # trainer = GBDTTrainer(config, total_df, test_df,len(user_df))
     
     breakpoint()
 

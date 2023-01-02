@@ -152,6 +152,27 @@ class Preprocessor:
             df["rating"] = 0 #interaction : 0
 
         return df
+    
+    #Todo : test dataset 생성, 처음부터 user가 보지 않은 영화의 prob를 뽑는다.
+    def _make_test_dataset(self):
+        df = pd.DataFrame(columns=["user", "item"])
+        _user = []
+        _item = []
+
+        for user, values in tqdm(self.item_popular.items()):
+            _df = pd.DataFrame(columns=["user", "item"])
+
+            _user = _user + [user] * len(values)
+            _item = _item + values
+        
+        df["user"] = _user
+        df["item"] = _item
+        df["item"] = df["item"].astype(int)
+        
+        #item, user side information merge
+        df = df.merge(self.item_df,how="inner",on="item").merge(self.user_df,how="inner",on="user")
+        
+        return df
 
                 
             
