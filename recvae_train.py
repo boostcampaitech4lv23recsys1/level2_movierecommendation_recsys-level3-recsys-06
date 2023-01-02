@@ -187,11 +187,14 @@ if __name__ == "__main__":
         "data_dir": './data/train/ae_data',
         "weight_decay": 0.01,
         "num_workers": 1,
-        "model_name": 'RecVAE',
+        "model_name": 'RecVAE', # [MultiDAE, MultiVAE, RecVAE]
         "output_path": './output/auto_encoder',
 
         "n_users": 31360,
         "n_items": 6807,
+
+        'anneal_cap': 0.2,
+        'total_anneal_step': 200000
     }
     ae_train(config)
     

@@ -7,6 +7,9 @@ import torch
 import csv
 from tqdm import tqdm
 
+from data_loader.ae_dataloader import AETrainDataSet, AETestDataSet
+from data_loader.data_loaders import AEDataLoader
+
 
 def make_prediction_file(output_path, inference_results, config, total_recall_at_k, user_label, item_label):
     model_name = config['model_name']

@@ -83,7 +83,12 @@ def ae_train(config):
         wandb.run.name = f'{model_name}_n_epoch{n_epochs}_lr{lr}_dropout{dropout_rate}_batch{batch_size}_fold{fold}'
 
         print(f'====================Start: {fold}-fold for 5 fold====================')
-        model = RecVAE(600, 200, 6807, config).to(device)
+        if model_name == "MultiVAE":
+            model = MultiVAE(config, p_dims, dropout=dropout_rate).to(device)
+        elif model_name == "MultiDAE":
+            model = MultiDAE(config, p_dims, dropout=dropout_rate).to(device)
+        else:
+            model = RecVAE(*p_dims, config).to(device)
         # optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=0.00)
         if model_name == "MultiDAE":
             criterion = loss_function_dae
@@ -113,6 +118,7 @@ def ae_train(config):
         
     
     total_recall_at_k = round(sum(all_recalls)/len(all_recalls),4)
+    
     print(f'==============최종 recall_at_k는 {total_recall_at_k}입니다===============')
 
     print(f'=======================Starting Inference=======================')
@@ -132,21 +138,19 @@ def ae_train(config):
     write_submission_file(output_path, final_10, config, total_recall_at_k, user_label, item_label)
 
 
-
-
 if __name__ == "__main__":
     config = {
-        "n_kfold": 5,
-        "n_epochs": 5,
+        "n_kfold": 1,
+        "n_epochs": 1,
         "dropout_rate": 0.6,
         "lr": 0.0005,
-        "batch_size": 64,
+        "batch_size": 32,
 
         "root_data": './data/train/' ,
         "data_dir": './data/train/ae_data',
-        "weight_decay": 0.01,
+        "weight_decay": 0.00,
         "num_workers": 4,
-        "model_name": 'RecVAE',
+        "model_name": 'RecVAE', # [MultiDAE, MultiVAE, RecVAE]
         "output_path": './output/auto_encoder',
         "model_saved_path": './saved_model',
 

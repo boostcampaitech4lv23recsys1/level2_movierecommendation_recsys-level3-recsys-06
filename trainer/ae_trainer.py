@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import time
-import math
 from copy import deepcopy
 
 from torchvision.utils import make_grid
@@ -19,6 +18,7 @@ class AETrainer:
     def __init__(self, fold, model, optimizer, config, device,
                  train_loader, valid_loader, criterion=None, lr_scheduler=None):
         self.model = model
+        self.model_name = config['model_name']
         self.criterion = criterion
         self.optimizer = optimizer
         self.config = config
@@ -77,15 +77,32 @@ class AETrainer:
     def train_epoch(self, epoch):
         self.model.train()
         train_loss = 0
+
+        if self.model_name == "MultiVAE":
+            self.update_count = 0
+
         for step, batch in enumerate(self.train_loader):
             batch = batch.squeeze(1).to(self.device)
             self.optimizer.zero_grad()
-            _, loss = self.model(user_ratings = batch, beta = None, gamma = 0.0005, dropout_rate = self.dropout_rate)
+
+            if self.model_name == "MultiVAE":
+                anneal = self.model.get_anneal(self.update_count)
+                output, mu, logvar = self.model(batch)
+                loss = self.criterion(output, batch, mu, logvar, anneal)
+                self.update_count += 1
+
+            elif self.model_name == "MultiDAE":
+                output = self.model(batch)
+                loss = self.criterion(output, batch)
+
+            else:   
+                _, loss = self.model(user_ratings = batch, beta = None, gamma = 0.0005, dropout_rate = self.dropout_rate)
+            
             train_loss += loss.item()
             loss.backward()
             self.optimizer.step()
 
-        train_loss /= math.ceil(self.n_users//self.batch_size)
+        train_loss /= self.n_users
         return train_loss
 
 
@@ -97,7 +114,15 @@ class AETrainer:
             for step, batch in enumerate(self.valid_loader):
                 batch = batch.squeeze(1).to(self.device)
                 input_batch, heldout_data = torch.split(batch, self.n_items, dim=1)
-                output_batch = self.model(input_batch, calculate_loss=False)
+ 
+                if self.model_name == "MultiVAE":
+                    anneal = self.model.get_anneal(self.update_count)
+                    output_batch, mu, logvar = self.model(input_batch)
+
+                elif self.model_name == "MultiDAE":
+                    output_batch = self.model(input_batch)
+                else: 
+                    output_batch = self.model(input_batch, calculate_loss=False)
 
                 # Exclude examples from training set
                 input_batch, output_batch, heldout_data = input_batch.cpu().numpy(), output_batch.cpu().numpy(), heldout_data.cpu().numpy()
@@ -111,6 +136,18 @@ class AETrainer:
 
     def inference(self, raw_data):
         raw_data = raw_data.to(self.device)
-        inference_result = self.model(raw_data, calculate_loss=False).cpu().detach().numpy()
+        inference_result = self._get_inference(raw_data).cpu().detach().numpy()
 
         return inference_result
+
+
+    def _get_inference(self, raw_data):
+        if self.model_name == 'MultiVAE':
+            result, _, _ = self.model(raw_data)
+        elif self.model_name == 'MultiDAE':
+            result = self.model(raw_data)
+        else:
+            result = self.model(raw_data, calculate_loss=False)
+        return result
+
+
