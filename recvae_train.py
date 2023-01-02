@@ -19,7 +19,7 @@ from scipy import sparse
 from copy import deepcopy
 
 from parse_config import ConfigParser
-from utils import prepare_device, k_recoommended_movies
+from utils import prepare_device
 
 from trainer import Trainer
 from trainer.ae_trainer import AETrainer

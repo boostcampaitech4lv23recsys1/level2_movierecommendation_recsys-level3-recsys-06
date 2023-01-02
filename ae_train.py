@@ -17,7 +17,7 @@ import pandas as pd
 from scipy import sparse
 
 from parse_config import ConfigParser
-from utils import prepare_device, k_recoommended_movies
+from utils import prepare_device
 
 from trainer import Trainer
 from trainer.ae_trainer import AETrainer
