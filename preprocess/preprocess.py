@@ -71,6 +71,7 @@ class Preprocessor:
         item_df = pd.DataFrame(columns=item_use_features)
 
         user_use_features = ["favorite_genre","maniatic"]
+        numeric_features = ["maniatic"]
  
 
         for item, values in item_dict.items():
@@ -79,7 +80,7 @@ class Preprocessor:
                 if column in item_multi_features:
                     temp.append(value)
                 else:
-                    temp.append(value[0]) #값이 여러개가 아닌 경우 0번째 값만 넣어줌
+                    temp.append(int(value[0])) #값이 여러개가 아닌 경우 0번째 값만 넣어줌, 정수형으로 바꿔줘야 함
             item_df.loc[item] = temp
         
         genre_class = self.genre_encoder.classes_
@@ -100,14 +101,21 @@ class Preprocessor:
         for item, values in user_dict.items():
             temp = []
             for column, value in values.items():
-                temp.append(value[0]) #값이 여러개가 아닌 경우 0번째 값만 넣어줌
-            user_df.loc[item] = temp
-        
+                if column in numeric_features:
+                    temp.append(value[0]) #값이 여러개가 아닌 경우 0번째 값만 넣어줌
+                else:
+                    v = int(value[0])
+                    temp.append(v)
+            user_df.loc[int(item)] = temp
+
+        #hard coding
+        user_df["favorite_genre"] = user_df["favorite_genre"].astype(int)
+
         item_df = item_df.reset_index(names=["item"])
         self.item_df = item_df
         user_df = user_df.reset_index(names=["user"])
         self.user_df = user_df
-
+        
         # # 인코딩 원본으로 바꿔줌, inverse_transform 처리해주는 코드 
         # item_df["item"] = self.item_encoder.inverse_transform(item_df["item"])
         # user_df["user"] = user_df["user"].astype(int) #user encoding이 소수로 되어 있어서 정수형으로 바꿔줘야 함
@@ -122,36 +130,7 @@ class Preprocessor:
         return item_df, user_df, interaction_df
     
     #Todo : interaction을 통해 item : count dict 생성, kfold 전 후에 사용할 수 있도록 구현, 일단 전 기준..??
-    def _make_negative_sampling(self,neg_ratio, threshold, sampling_mode):
-        
-        #새로 뽑은 negative sample의 user, item df 정보도 붙여줘야 됨.
-        if sampling_mode == "popular":
-            df = pd.DataFrame(columns=["user", "item"])
-            _user = []
-            _item = []
-
-            for user, values in tqdm(self.item_popular.items()):
-                _df = pd.DataFrame(columns=["user", "item"])
-
-                values = values[:threshold] #인기도 상위 몇까지 자를지
-                positive_num = self.user_item_count[user] #해당 유저의 interaction item 개수
-                negative_num = int(positive_num * neg_ratio) #negative 개수
-                negative_item = np.random.choice(values, negative_num, replace=False) #replace = False : 중복 허용 x
-                # _df["user"] = user
-                # _df["item"] = negative_item
-                # df = pd.concat([df,_df])
-                _user = _user + [user] * negative_num
-                _item = np.append(_item, negative_item, axis=0)
-            df["user"] = _user
-            df["item"] = _item
-            df["item"] = df["item"].astype(int)
-            
-            #item, user side information merge
-            df = df.merge(self.item_df,how="inner",on="item").merge(self.user_df,how="inner",on="user")
-            
-            df["rating"] = 0 #interaction : 0
-
-        return df
+    
     
     #Todo : test dataset 생성, 처음부터 user가 보지 않은 영화의 prob를 뽑는다.
     def _make_test_dataset(self):
@@ -160,20 +139,67 @@ class Preprocessor:
         _item = []
 
         for user, values in tqdm(self.item_popular.items()):
+            _user.extend([user] * len(values))
+            values = list(map(int,values))
+            _item.extend(values)
+        
+        print("extend후")
+        print(_user[:10])
+        print(_item[:10])
+        df["user"] = np.array(_user)
+        df["item"] = np.array(_item)
+
+        
+        print("merge")
+        #item, user side information merge
+        df = df.merge(self.item_df,how="inner",on="item").merge(self.user_df,how="inner",on="user")
+        print("merg후")
+        df.to_csv("testset.csv",index=False)
+        return df
+
+def _make_negative_sampling(train_user, item_df, user_df, neg_ratio, threshold, sampling_mode): #need: item_popular
+    asset_dir = "/opt/ml/level2_movierecommendation_recsys-level3-recsys-06/saved/asset"
+    item_popular_path = os.path.join(asset_dir, "item_popular2.pkl")
+    with open(item_popular_path, 'rb') as f:
+        item_popular = pickle.load(f)
+        
+    user_item_count_path = os.path.join(asset_dir, "user_item_count.pkl")
+    with open(user_item_count_path, 'rb') as f:
+        user_item_count = pickle.load(f)    
+
+    #새로 뽑은 negative sample의 user, item df 정보도 붙여줘야 됨.
+    if sampling_mode == "popular":
+        df = pd.DataFrame(columns=["user", "item"])
+        _user = []
+        _item = []
+
+        for user, values in tqdm(item_popular.items()):
             _df = pd.DataFrame(columns=["user", "item"])
 
-            _user = _user + [user] * len(values)
-            _item = _item + values
-        
+            values = values[:threshold] #인기도 상위 몇까지 자를지
+            positive_num = user_item_count[user] #해당 유저의 interaction item 개수
+            negative_num = int(positive_num * neg_ratio) #negative 개수
+            # print("values len :", len(values))
+            # print("positive_num:",positive_num)
+            # print("negative_num:", negative_num)
+            # print("user", user)
+            negative_item = np.random.choice(values, negative_num, replace=False) #replace = False : 중복 허용 x
+
+            
+            _user.extend([user] * negative_num)
+            _item = np.append(_item, negative_item, axis=0)
         df["user"] = _user
         df["item"] = _item
         df["item"] = df["item"].astype(int)
+
+        df = df[df["user"].isin(train_user)]
         
         #item, user side information merge
-        df = df.merge(self.item_df,how="inner",on="item").merge(self.user_df,how="inner",on="user")
+        df = df.merge(item_df,how="inner",on="item").merge(user_df,how="inner",on="user")
         
-        return df
+        df["rating"] = 0 #interaction : 0
 
+    return df
                 
             
 
