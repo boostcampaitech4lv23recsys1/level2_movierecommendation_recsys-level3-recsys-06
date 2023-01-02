@@ -25,19 +25,40 @@ def main(config):
     asset_dir = "/opt/ml/level2_movierecommendation_recsys-level3-recsys-06/saved/asset"
     preprocessor = Preprocessor()
 
+    print("==========interaction dataframe 생성===========")
     interaction_df, title_df = preprocessor._preprocess_dataset()
     all_items = sorted(list(title_df['item'].unique()))
 
     logger = config.get_logger('train')
 
+    print("==========item, user 피클 파일 불러오기===========")
     with open(os.path.join(asset_dir, "item_dict.pkl"), 'rb') as f:
         item_dict = pickle.load(f)
     with open(os.path.join(asset_dir, "user_dict.pkl"), 'rb') as f:
         user_dict = pickle.load(f)
-        
+    
+    print("==========side information 추가===========")
     item_df, user_df, interaction_df = preprocessor._make_dataset(item_dict, user_dict, True)
+    item_df, user_df, interaction_df = preprocessor._make_test_dataset(item_dict, user_dict, True)
 
+    # interaction_df.to_csv("interaction_df.csv", index = False)
+    # interaction_df = pd.read_csv("interaction_df.csv")
+    
+
+    print("==========negative sampling 생성===========")
+    
+
+    neg_df = preprocessor._make_negative_sampling(neg_ratio=0.3, threshold=1000, sampling_mode="popular") #0.3, 1000 -> 1532251
+    total_df = pd.concat([interaction_df, neg_df])
+
+    if config['name'] == "GBDT":
+        trainer = GBDTTrainer(config, total_df, len(user_df))
+
+
+
+    
     breakpoint()
+
 
 
 if __name__ == '__main__':
