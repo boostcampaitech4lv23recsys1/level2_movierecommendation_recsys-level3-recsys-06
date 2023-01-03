@@ -9,7 +9,6 @@ import numpy as np
 
 import pickle
 
-from scipy import sparse
 import os
 import pandas as pd
 from scipy import sparse

@@ -66,10 +66,10 @@ def ae_train(config):
 
     # 파일을 저장할 디렉토리 설정
     if not os.path.exists(output_path):
-        os.mkdir(output_path)
+        os.makedirs(output_path)
 
     if not os.path.exists(model_saved_path):
-        os.mkdir(model_saved_path)
+        os.makedirs(model_saved_path)
 
     all_recalls = []
     inference_results = []
@@ -140,11 +140,11 @@ def ae_train(config):
 
 if __name__ == "__main__":
     config = {
-        "n_kfold": 1,
-        "n_epochs": 1,
+        "n_kfold": 5,
+        "n_epochs": 300,
         "dropout_rate": 0.6,
         "lr": 0.0005,
-        "batch_size": 32,
+        "batch_size": 1024,
 
         "root_data": './data/train/' ,
         "data_dir": './data/train/ae_data',
