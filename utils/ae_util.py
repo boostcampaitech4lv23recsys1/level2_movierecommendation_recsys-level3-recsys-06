@@ -45,7 +45,7 @@ def write_submission_file(output_path, final_10, config, total_recall_at_k, user
 
     if model_name == 'EASE':
         EASE_lambda = config['EASE_lambda']
-        with open(output_path + f'/mat_{model_name}_lambda{EASE_lambda}.pkl', "w") as csvfile:
+        with open(output_path + f'/sub_{model_name}_{total_recall_at_k}_lambda{EASE_lambda}.csv', "w") as csvfile:
             writer = csv.writer(csvfile)
             write_csv(writer, final_10, label_to_user, label_to_item)
 

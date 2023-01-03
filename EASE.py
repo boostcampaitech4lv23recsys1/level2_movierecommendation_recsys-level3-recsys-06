@@ -1,9 +1,12 @@
 import time
 import os
+from tqdm import tqdm
 
 import torch
+from scipy import sparse
 
 import numpy as np
+import pandas as pd
 import bottleneck as bn
 
 from parse_config import ConfigParser
@@ -24,7 +27,7 @@ np.random.seed(SEED)
 
 
 def EASE_train_inference(config):
-    start_time = time.time()
+    print('========================Data Loading========================')
     root_data = config['root_data']
     data_dir = config['data_dir']
     model_name = config['model_name']
@@ -42,12 +45,16 @@ def EASE_train_inference(config):
 
     user_label, item_label = get_labels(data_dir)
     raw_data, train_mark = make_inference_data_and_mark(config, root_data, user_label, item_label)
-
+    rating_data = pd.read_csv('./data/train/train_ratings.csv').drop(columns=['time'])
+    rating_data['user'] = rating_data['user'].apply(lambda x: user_label[x])
+    rating_data['item'] = rating_data['item'].apply(lambda x: item_label[x])
     inference_results = np.zeros((31360, 6807))
-    for i in tqdm(range(2)):
-        rating_data = pd.read_csv('./data/train/train_ratings.csv').drop(columns=['time'])
-        rating_data['user'] = rating_data['user'].apply(lambda x: user_label[x])
-        rating_data['item'] = rating_data['item'].apply(lambda x: item_label[x])
+
+    print('========================Training Start========================')
+    for i in range(1, 101):
+        print(f'================{i}번쨰 모델 학습 및 인퍼런스================')
+        start_time = time.time()
+
         data_tr, data_te = split_train_test_proportion(rating_data)
         data_tr, data_te = ae_data_load(data_tr, data_te)
         
@@ -58,7 +65,8 @@ def EASE_train_inference(config):
         temp_nonzero = data_tr.nonzero()
         inference_result[temp_nonzero]=-np.inf
         recall = recall_at_k_batch(inference_result, data_te, 10)
-        print(f'[{i}번째 모델 recall] {recall}')
+        print(f'[================{i}번째 모델 recall] {recall}================')
+        print(f'약 {round((time.time() - start_time)/60, 1)}분 걸렸습니다')
 
         inference_results += inference_result
 
@@ -66,7 +74,7 @@ def EASE_train_inference(config):
     inference_results[train_mark]=-np.inf
     final_10 = bn.argpartition(-inference_results, 10, axis=1)[:, :10]  # 10개만 남겨둠
 
-    total_recall_at_k = 1
+    total_recall_at_k = 'bagging'
     # 예측 파일을 저장함
     make_prediction_file(output_path, inference_results, config, total_recall_at_k, user_label, item_label)
     
@@ -105,25 +113,20 @@ def filter_triplets(tp, min_uc=5, min_sc=0):
     usercount, itemcount = get_count(tp, 'user'), get_count(tp, 'item')
     return tp, usercount, itemcount
 
-def split_train_test_proportion(data, test_prop=0.3):
+def split_train_test_proportion(data, test_prop=0.2):
     data_grouped_by_user = data.groupby('user')
     tr_list, te_list = list(), list()
 
-    np.random.seed(123)
-    
+    print('==================유저 데이터 준비==================')
     for _, group in tqdm(data_grouped_by_user):
         n_items_u = len(group)
         
-        if n_items_u >= 5:
-            idx = np.zeros(n_items_u, dtype='bool')
-            idx[np.random.choice(n_items_u, size=int(test_prop * n_items_u), replace=False).astype('int64')] = True
+        idx = np.zeros(n_items_u, dtype='bool')
+        idx[np.random.choice(n_items_u, size=int(test_prop * n_items_u), replace=False).astype('int64')] = True
 
-            tr_list.append(group[np.logical_not(idx)])
-            te_list.append(group[idx])
+        tr_list.append(group[np.logical_not(idx)])
+        te_list.append(group[idx])
         
-        else:
-            tr_list.append(group)
-    
     data_tr = pd.concat(tr_list)
     data_te = pd.concat(te_list)
 
@@ -158,7 +161,7 @@ if __name__ == "__main__":
         "n_users": 31360,
         "n_items": 6807,
 
-        'EASE_lambda': 1500
+        'EASE_lambda': 400
     }
     EASE_train_inference(config)
     
