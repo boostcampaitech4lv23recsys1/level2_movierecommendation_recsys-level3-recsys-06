@@ -56,7 +56,7 @@ class AETrainer:
                 best_score = recall_epoch
                 print("[Model Saved] This Epoch is the best at metric so far!")
             
-            wandb.log({"epoch": epoch, "recall_epoch": recall_epoch, "best_epoch": best_epoch, "train_loss": train_loss})
+            wandb.log({"epoch": epoch, "recall epoch": recall_epoch, "best epoch": best_epoch, "train loss": train_loss, "best score": best_score})
             print(f'[Recall for Epoch {epoch}] {recall_epoch}')
             print(f'Train loss: {train_loss:.5f} | Train loss Imporved: {round(last_train_loss-train_loss, 4)}')  
             print(f'epoch에 약 {round(time.time()-epoch_stime,1)}초 걸렸습니다', '\n')
