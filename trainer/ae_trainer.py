@@ -16,7 +16,7 @@ class AETrainer:
     Trainer class
     """
     def __init__(self, fold, model, optimizer, config, device,
-                 train_loader, valid_loader, criterion=None, lr_scheduler=None):
+                 train_loader, valid_loader, heldouts, criterion=None, lr_scheduler=None):
         self.model = model
         self.model_name = config['model_name']
         self.criterion = criterion
@@ -32,28 +32,30 @@ class AETrainer:
         self.n_items = config['n_items']
         self.batch_size = config['n_items']
         self.fold = fold
+        self.heldouts = heldouts.toarray()
 
     
     def train(self):
         last_train_loss = 0.0
         best_score = float('-inf')
         best_epoch = -1
+        X_preds_best = None
 
         for epoch in range(1, self.n_epochs+1):
             epoch_stime = time.time()
 
             print(f"[Fold {self.fold} | Epoch {epoch}]")
             train_loss = self.train_epoch(epoch)
-            X_preds, heldouts = self.valid_epoch(epoch)
-
+           
+            X_preds = self.valid_epoch(epoch)
             X_preds = np.concatenate(X_preds)  # 모든 유저에 대한 예측
-            heldouts = np.concatenate(heldouts)  # 모든 유저들의 숨겨놓은 영화 목록 (1)
-
-            recall_epoch = recall_at_k_batch(X_preds, heldouts, 10)
+        
+            recall_epoch = recall_at_k_batch(X_preds, self.heldouts, 10)
             if recall_epoch > best_score:
                 best_epoch = epoch
-                torch.save(self.model.state_dict(), f'saved_model/{self.config["model_name"]}/lr{self.config["lr"]}_dropout{self.config["dropout_rate"]}_epoch{self.config["n_epochs"]}_fold{self.fold}.pth')
+                torch.save(self.model.state_dict(), f'saved_model/{self.config["model_name"]}/lr{self.config["lr"]}_dropout{self.config["dropout_rate"]}_epoch{self.config["n_epochs"]}_fold{self.fold}.pt')
                 best_score = recall_epoch
+                X_preds_best = X_preds
                 print("[Model Saved] This Epoch is the best at metric so far!")
             
             wandb.log({"epoch": epoch, "recall epoch": recall_epoch, "best epoch": best_epoch, "train loss": train_loss, "best score": best_score})
@@ -68,10 +70,9 @@ class AETrainer:
             print("[Best Model Loaded]")
             print(f"Best Epoch {best_epoch}")
             self.model = deepcopy(self.model)
-            self.model.load_state_dict(torch.load(f'saved_model/{self.config["model_name"]}/lr{self.config["lr"]}_dropout{self.config["dropout_rate"]}_epoch{self.config["n_epochs"]}_fold{self.fold}.pth'))
-            recall_epoch = best_score
+            self.model.load_state_dict(torch.load(f'saved_model/{self.config["model_name"]}/lr{self.config["lr"]}_dropout{self.config["dropout_rate"]}_epoch{self.config["n_epochs"]}_fold{self.fold}.pt'))
 
-        return recall_epoch, X_preds, heldouts
+        return best_score
 
 
     def train_epoch(self, epoch):
@@ -109,11 +110,10 @@ class AETrainer:
     def valid_epoch(self, epoch):
         self.model.eval()
         X_preds = []  # 배치마다 나오는 예측치를 저장해줄 리스트
-        heldouts = []  # 숨겨놓은 아이템을 기록해놓는 테이블 (concat하면 전체 유저의 데이터가 될 것)
         with torch.no_grad():
             for step, batch in enumerate(self.valid_loader):
                 batch = batch.squeeze(1).to(self.device)
-                input_batch, heldout_data = torch.split(batch, self.n_items, dim=1)
+                input_batch, _ = torch.split(batch, self.n_items, dim=1)
  
                 if self.model_name == "MultiVAE":
                     anneal = self.model.get_anneal(self.update_count)
@@ -125,13 +125,12 @@ class AETrainer:
                     output_batch = self.model(input_batch, calculate_loss=False)
 
                 # Exclude examples from training set
-                input_batch, output_batch, heldout_data = input_batch.cpu().numpy(), output_batch.cpu().numpy(), heldout_data.cpu().numpy()
+                input_batch, output_batch = input_batch.cpu().numpy(), output_batch.cpu().numpy()
                 output_batch[input_batch.nonzero()] = -np.inf  # 이미 본 영화는 모두 -np.inf 처리
             
                 X_preds.append(output_batch)
-                heldouts.append(heldout_data)
         
-        return X_preds, heldouts
+        return X_preds
 
 
     def inference(self, raw_data):

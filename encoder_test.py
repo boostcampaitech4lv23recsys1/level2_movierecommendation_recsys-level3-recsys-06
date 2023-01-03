@@ -42,7 +42,7 @@ np.random.seed(SEED)
 
 
 def ae_train(config):
-    wandb.login()
+    # wandb.login()
 
     start_time = time.time()
     n_kfold = config['n_kfold']
@@ -79,42 +79,48 @@ def ae_train(config):
 
 
     for fold in range(1, n_kfold+1):  # k_fold를 일단 5회로 적어놓기
-        wandb.init(project=f"Movie_Rec_{model_name}", config=config)
-        wandb.run.name = f'{model_name}_n_epoch{n_epochs}_lr{lr}_dropout{dropout_rate}_batch{batch_size}_fold{fold}'
+        # wandb.init(project=f"Movie_Rec_{model_name}", config=config)
+        # wandb.run.name = f'{model_name}_n_epoch{n_epochs}_lr{lr}_dropout{dropout_rate}_batch{batch_size}_fold{fold}'
 
-        print(f'====================Start: {fold}-fold for 5 fold====================')
-        if model_name == "MultiVAE":
-            model = MultiVAE(config, p_dims, dropout=dropout_rate).to(device)
-        elif model_name == "MultiDAE":
-            model = MultiDAE(config, p_dims, dropout=dropout_rate).to(device)
-        else:
-            model = RecVAE(*p_dims, config).to(device)
-        # optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=0.00)
-        if model_name == "MultiDAE":
-            criterion = loss_function_dae
-        elif model_name == "MultiVAE":
-            criterion = loss_function_vae
-        else:
-            criterion=None
+        # print(f'====================Start: {fold}-fold for 5 fold====================')
+        # if model_name == "MultiVAE":
+        #     model = MultiVAE(config, p_dims, dropout=dropout_rate).to(device)
+        # elif model_name == "MultiDAE":
+        #     model = MultiDAE(config, p_dims, dropout=dropout_rate).to(device)
+        # else:
+        model = RecVAE(*p_dims, config).to(device)
+        model.load_state_dict(torch.load(f'/opt/ml/movie_template/lr0.0005_dropout0.6_epoch250_fold{fold}.pth'))
+        # # optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=0.00)
+        # if model_name == "MultiDAE":
+        #     criterion = loss_function_dae
+        # elif model_name == "MultiVAE":
+        #     criterion = loss_function_vae
+        # else:
+        #     criterion=None
             
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay = weight_decay)
+        # optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay = weight_decay)
         tr_data, te_data = ae_data_load(data_dir, fold)
-        train_loader, valid_loader = get_loaders(tr_data, te_data, config)
+        # train_loader, valid_loader = get_loaders(tr_data, te_data, config)
         
-        trainer = AETrainer(fold=fold, model=model, optimizer=optimizer, config=config, device=device, train_loader=train_loader, valid_loader=valid_loader, heldouts=te_data, criterion=criterion)
+        # trainer = AETrainer(fold=fold, model=model, optimizer=optimizer, config=config, device=device, train_loader=train_loader, valid_loader=valid_loader, criterion=criterion)
 
         print(f'Training Start')
-        best_score = trainer.train()
+        # recall_epoch, X_preds, heldouts = trainer.train()
         
         # 마지막 훈련 완료된 recall 사용
-        all_recalls.append(best_score)
+        model.eval()
+        X_preds = model(torch.Tensor(tr_data.toarray()).to(device), calculate_loss=False)
+        heldouts = te_data.toarray()
+        X_preds[tr_data.nonzero()] = -np.inf
+        recall_epoch = recall_at_k_batch(X_preds.cpu().detach().numpy(), heldouts, 10)
+        all_recalls.append(recall_epoch)
 
         # 이 모델을 사용해서 인퍼런스 진행 및 리스트에 저장
-        inference_result = trainer.inference(raw_data)
+        inference_result = model(torch.Tensor(raw_data).to(device), calculate_loss=False).cpu().detach().numpy()
         inference_results.append(inference_result)
 
         # wandb save for each fold
-        wandb.join()
+        # wandb.join()
         
     
     total_recall_at_k = round(sum(all_recalls)/len(all_recalls),4)
@@ -140,11 +146,11 @@ def ae_train(config):
 
 if __name__ == "__main__":
     config = {
-        "n_kfold": 1,
-        "n_epochs": 1,
+        "n_kfold": 5,
+        "n_epochs": 50,
         "dropout_rate": 0.6,
-        "lr": 0.0005,
-        "batch_size": 32,
+        "lr": 0.001,
+        "batch_size": 64,
 
         "root_data": './data/train/' ,
         "data_dir": './data/train/ae_data',
@@ -161,4 +167,3 @@ if __name__ == "__main__":
         'anneal_cap': 0.2
     }
     ae_train(config)
-    
