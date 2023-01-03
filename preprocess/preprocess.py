@@ -66,7 +66,9 @@ class Preprocessor:
         return interaction_df, title_df, self.user_encoder, self.item_encoder
 
     def _make_dataset(self, item_dict, user_dict, use_genre):
-        item_use_features = ["release_year", "categorized_year_gap5", "categorized_year_gap10", "title","director","main_director","writer","main_writer","genre"]
+        ###################features 실험 수정############################
+        # item_use_features = ["release_year", "categorized_year_gap5", "categorized_year_gap10", "title","director","main_director","writer","main_writer","genre"]
+        item_use_features = ["categorized_year_gap5", "categorized_year_gap10", "title","director","main_director","writer","main_writer","genre"]
         item_multi_features = ["director", "writer","genre"]
         item_df = pd.DataFrame(columns=item_use_features)
 
@@ -80,6 +82,8 @@ class Preprocessor:
                 if column in item_multi_features:
                     temp.append(value)
                 else:
+                    if column not in item_use_features:
+                        continue
                     temp.append(int(value[0])) #값이 여러개가 아닌 경우 0번째 값만 넣어줌, 정수형으로 바꿔줘야 함
             item_df.loc[item] = temp
         
@@ -138,7 +142,7 @@ class Preprocessor:
         _user = []
         _item = []
 
-        for user, values in tqdm(self.item_popular.items()):
+        for user, values in tqdm(self.item_popular.items()): #안본 아이템 인기순으로 정렬된 피클 파일 순회
             _user.extend([user] * len(values))
             values = list(map(int,values))
             _item.extend(values)
@@ -149,12 +153,14 @@ class Preprocessor:
         df["user"] = np.array(_user)
         df["item"] = np.array(_item)
 
-        
-        print("merge")
+
         #item, user side information merge
-        df = df.merge(self.item_df,how="inner",on="item").merge(self.user_df,how="inner",on="user")
-        print("merg후")
-        df.to_csv("testset.csv",index=False)
+        #itemdf, userdf 먼저 만들고 
+        # df = df.merge(self.item_df,how="left",on="item").merge(self.user_df,how="left",on="user")
+        # 
+        # user별로 grouped하고
+        
+        #df : [user, item] -> user * item 안본 개수 만큼
         return df
 
 def _make_negative_sampling(train_user, item_df, user_df, neg_ratio, threshold, sampling_mode): #need: item_popular
@@ -201,21 +207,7 @@ def _make_negative_sampling(train_user, item_df, user_df, neg_ratio, threshold, 
 
     return df
                 
-            
-
         
-
-        
-
-
-
-
-        
-
-
-
-            
-
 
 
 if __name__ == '__main__':

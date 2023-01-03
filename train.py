@@ -31,30 +31,30 @@ def main(config):
 
     logger = config.get_logger('train')
 
-    print("==========item, user 피클 파일 불러오기===========")
+    print("==========item, user 피클 파일 불러오기===========") 
     with open(os.path.join(asset_dir, "item_dict.pkl"), 'rb') as f:
         item_dict = pickle.load(f)
     with open(os.path.join(asset_dir, "user_dict.pkl"), 'rb') as f:
         user_dict = pickle.load(f)
     
-    print("==========side information 추가===========")
+    print("==========side information 추가===========") #16G
     item_df, user_df, interaction_df = preprocessor._make_dataset(item_dict, user_dict, True)
 
-    # interaction_df.to_csv("interaction_df.csv", index = False)
-    # interaction_df = pd.read_csv("interaction_df.csv")
+    print("=====print shape=====")
+    print(item_df.shape)
+    print(user_df.shape)
+    print(interaction_df.shape)
     
 
-    print("==========test_df 생성===========")
+    print("==========test_df 생성===========") #20G
     # neg_df = preprocessor._make_negative_sampling(neg_ratio=1.2, threshold=3800, sampling_mode="popular") #0.3, 1000 -> 1532251 , neg_ratio는 1이상
     # total_df = pd.concat([interaction_df, neg_df]) #지금 안쓰는 중
     test_df = preprocessor._make_test_dataset()
+    print("test_df.shape", test_df.shape)
 
     # if config['name'] == "GBDT":
     trainer = GBDTTrainer(config, interaction_df, test_df,item_df, user_df,len(user_df))
     trainer._train_epoch(5)
-
-    
-    breakpoint()
 
 
 
