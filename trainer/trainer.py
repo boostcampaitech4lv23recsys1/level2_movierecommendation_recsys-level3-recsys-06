@@ -91,7 +91,7 @@ class GBDTTrainer():
 
             #train_user에 있는 user의 negative sampling진행
             print("======negative_sampling====")
-            neg_df = _make_negative_sampling(train_user, self.item_df, self.user_df, neg_ratio=1.2, threshold=3800, sampling_mode="popular")
+            neg_df = _make_negative_sampling(train_user, self.item_df, self.user_df, neg_ratio=0.8, threshold=3800, sampling_mode="popular")
 
             print("=====positive, negative concat=========")
             train_df = pd.concat([train_df,neg_df]) #shape:
@@ -179,6 +179,7 @@ class GBDTTrainer():
         top_30 = top.head(30)
         top_30.to_csv("lgbm_30.csv",index=False)
         # breakpoint()
+        
     
 
 
