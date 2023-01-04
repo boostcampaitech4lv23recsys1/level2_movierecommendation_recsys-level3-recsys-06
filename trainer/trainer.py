@@ -29,7 +29,7 @@ class GBDTTrainer():
         #             'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War',
         #             'Western', 'favorite_genre', 'maniatic', "whole_period","first_watch_year","last_watch_year","freq_rating_year","series",'rating']
 
-        ####feature 실험 수정!!#########
+        ####feature 실험 수정!!#########, n_estimators : 500, learning_rate 0.03
         self.use_features = ['user', 'item', 'release_year', 'title', 'main_director','series','favorite_genre','Action', 'Adventure', 'Animation', 'Children',
                     'Comedy', 'Crime', 'Documentary', 'Drama', 'Fantasy', 'Film-Noir','Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War','Western',
                     'maniatic',"whole_period","first_watch_year","last_watch_year","freq_rating_year",'rating']
@@ -51,7 +51,7 @@ class GBDTTrainer():
         :return: A log that contains average loss and metric in this epoch.
         """
         #index로 나누고,
-        kf = KFold(n_splits = 2, shuffle = True, random_state = 42)
+        kf = KFold(n_splits = 5, shuffle = True, random_state = 42)
         sub_result = [] #fold별 확률 담는 리스트
         for idx, (train_index, valid_index) in enumerate(kf.split(self.interaction_df.index)):
             #negative sampling을 fold별로 다르게 뽑히게
