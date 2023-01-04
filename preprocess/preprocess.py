@@ -68,11 +68,12 @@ class Preprocessor:
     def _make_dataset(self, item_dict, user_dict, use_genre):
         ###################features 실험 수정############################
         # item_use_features = ["release_year", "categorized_year_gap5", "categorized_year_gap10", "title","director","main_director","writer","main_writer","genre"]
-        item_use_features = ["categorized_year_gap5", "categorized_year_gap10", "title","director","main_director","writer","main_writer","genre"]
+        item_use_features = ['release_year', 'categorized_year_gap5', 'categorized_year_gap10', 'title', 'director', 'main_director', 'writer', 'main_writer', 'genre', 'series']
+        #multi class 사용시 아래 변수 사용
         item_multi_features = ["director", "writer","genre"]
         item_df = pd.DataFrame(columns=item_use_features)
 
-        user_use_features = ["favorite_genre","maniatic"]
+        user_use_features = ['favorite_genre', 'maniatic', 'duration', 'whole_period', 'first_watch_year', 'last_watch_year', 'freq_rating_year']
         numeric_features = ["maniatic"]
  
 

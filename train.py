@@ -27,14 +27,13 @@ def main(config):
 
     print("==========interaction dataframe 생성===========")
     interaction_df, title_df = preprocessor._preprocess_dataset()
-    all_items = sorted(list(title_df['item'].unique()))
+    # all_items = sorted(list(title_df['item'].unique()))
 
-    logger = config.get_logger('train')
 
     print("==========item, user 피클 파일 불러오기===========") 
-    with open(os.path.join(asset_dir, "item_dict.pkl"), 'rb') as f:
+    with open(os.path.join(asset_dir, "fm_item_dict.pkl"), 'rb') as f:
         item_dict = pickle.load(f)
-    with open(os.path.join(asset_dir, "user_dict.pkl"), 'rb') as f:
+    with open(os.path.join(asset_dir, "fm_user_dict.pkl"), 'rb') as f:
         user_dict = pickle.load(f)
     
     print("==========side information 추가===========") #16G
@@ -47,8 +46,6 @@ def main(config):
     
 
     print("==========test_df 생성===========") #20G
-    # neg_df = preprocessor._make_negative_sampling(neg_ratio=1.2, threshold=3800, sampling_mode="popular") #0.3, 1000 -> 1532251 , neg_ratio는 1이상
-    # total_df = pd.concat([interaction_df, neg_df]) #지금 안쓰는 중
     test_df = preprocessor._make_test_dataset()
     print("test_df.shape", test_df.shape)
 

@@ -23,29 +23,26 @@ class GBDTTrainer():
         self.user_df = user_df
         self.user_num = user_num
         
-        #label (rating) 포함 사용할 피쳐
+        ####label (rating) 포함 사용할 피쳐
         # self.use_features = ['user', 'item', 'release_year', 'categorized_year_gap5','categorized_year_gap10', 'title', 'main_director','main_writer', 'Action', 'Adventure', 'Animation', 'Children',
         #             'Comedy', 'Crime', 'Documentary', 'Drama', 'Fantasy', 'Film-Noir',
         #             'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War',
-        #             'Western', 'favorite_genre', 'maniatic', 'rating']
+        #             'Western', 'favorite_genre', 'maniatic', "whole_period","first_watch_year","last_watch_year","freq_rating_year","series",'rating']
 
         ####feature 실험 수정!!#########
-        self.use_features = ['user', 'item','categorized_year_gap5','categorized_year_gap10', 'title', 'main_director','main_writer', 'Action', 'Adventure', 'Animation', 'Children',
+        self.use_features = ['user', 'item', 'release_year', 'title', 'main_director', 'Action', 'Adventure', 'Animation', 'Children',
                     'Comedy', 'Crime', 'Documentary', 'Drama', 'Fantasy', 'Film-Noir',
                     'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War',
-                    'Western', 'favorite_genre', 'maniatic', 'rating']
-        
-        # self.cat_features = ['user', 'item', 'release_year', 'categorized_year_gap5',
-        #             'categorized_year_gap10', 'title', 'main_director','main_writer', 'Action', 'Adventure', 'Animation', 'Children',
-        #             'Comedy', 'Crime', 'Documentary', 'Drama', 'Fantasy', 'Film-Noir',
-        #             'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War',
-        #             'Western', 'favorite_genre'] #"maniatic 빼고 all" 
+                    'Western', 'favorite_genre', 'maniatic',"whole_period",'rating']
 
-        self.cat_features = ['user', 'item','categorized_year_gap5',
-                    'categorized_year_gap10', 'title', 'main_director','main_writer', 'Action', 'Adventure', 'Animation', 'Children',
+        
+        self.cat_features = ['user', 'item', 'release_year', 'title', 'main_director', 'Action', 'Adventure', 'Animation', 'Children',
                     'Comedy', 'Crime', 'Documentary', 'Drama', 'Fantasy', 'Film-Noir',
                     'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War',
-                    'Western', 'favorite_genre'] #"maniatic 빼고 all", 행별로 어떻게 쪼개나용 
+                    'Western','favorite_genre',"whole_period"] #"maniatic 빼고 all" 
+
+        # self.cat_features = ['user', 'item','release_year','categorized_year_gap5',
+        #             'categorized_year_gap10','title', 'main_director','main_writer',"favorite_genre"] #"maniatic 빼고 all", 행별로 어떻게 쪼개나용 
     
 
     def _train_epoch(self, epoch):
@@ -62,7 +59,7 @@ class GBDTTrainer():
             #negative sampling을 fold별로 다르게 뽑히게
 
             print(f"[FOLD: {idx + 1}] catboost")
-            print(self.use_features)
+            
 
             train_df = self.interaction_df.iloc[train_index].reset_index(drop = True)
             valid_df = self.interaction_df.iloc[valid_index].reset_index(drop = True)
@@ -105,15 +102,14 @@ class GBDTTrainer():
             cat_features = self.cat_features
 
             train_df = train_df[use_features]
+            print(train_df.columns)
 
             print("========training========")
-            lgb = LGBMClassifier() #하이퍼파라미터 튜닝
+            lgb = LGBMClassifier() #하이퍼파라미터 튜닝, lr : , estimator 1500, early stoping rounds 걸어주고 -> lr 0.05
             lgb.fit(train_df.drop(['rating'], axis=1),  train_df[["rating"]],categorical_feature=cat_features)
 
-            # if "rating" in use_features:
-            #     use_features.remove("rating")
-            # else:
-            #     pass
+            # lgb = CatBoostClassifier()
+            # lgb.fit(train_df.drop(['rating'], axis=1),  train_df[["rating"]],cat_features=cat_features)
 
             valid_user = list(valid_df["user"])
             recall_user = list(set(valid_user) & set(train_user))
@@ -126,7 +122,7 @@ class GBDTTrainer():
             
             _val_df["prob"] = _val_predict[:,1]
            
-            total_predict = [] #유저 X neg item 확률 값을 리스트로 넣는다.
+            total_predict = [] #유저 X neg item 확률 값을 리스트로 넣는다. [0.9,0.2, ...] len : 2억
             grouped = self.test_df.groupby(["user"])
             recall = 0
             count = 0
@@ -136,7 +132,7 @@ class GBDTTrainer():
                 group = group.merge(self.item_df,how="left",on="item").merge(self.user_df,how="left",on="user")
                 group = group[use_features[:-1]]
                 predict = lgb.predict_proba(group)
-                total_predict.extend(predict[:,1]) #유저의 negative item 확률
+                total_predict.extend(predict[:,1]) #유저의 negative item 확률 유저별 다름, (6493,)
 
                 #negative+valid k(valid len)개 추출, valid가 얼마나 포함되는지 확인
                 group["prob"] = predict[:,1]
@@ -154,27 +150,41 @@ class GBDTTrainer():
                 _recall = nrecall/k
                 recall += _recall
                 # print(f"{user} recall : ",_recall)
-
             print("========recall========")
             print(recall/self.user_num)
+            
+            fpredict = np.array(total_predict) #shape : (208313049,)
+            np.save(f"/opt/ml/level2_movierecommendation_recsys-level3-recsys-06/saved/fold_predict/fold_{idx}.npy", fpredict)
 
             print(f"==========={idx} 종료=======")
-            break    
+            breakpoint()
+             
             
-        sub_result.append(total_predict) #total_predict : user X negitem : predict
+        sub_result.append(total_predict) #total_predict : user X negitem : predict [[],[],[],[],[]] (5,(user X user neg item),1)
+        print(sub_result.shape)
         breakpoint()
 
         #TODO : (1) fold별 평균 계산 후 (2)유저별 높은 확률 값을 갖는 item 반환
-        _s = np.array(sub_result)
-        _s = _s.mean(axis=1)
-        _s = _s.reshape(-1)
+        _s = np.array(sub_result) #shape : (5,2억)
+        _s = _s.mean(axis=0)
 
-        self.test_df["total_prob"] = _s
+        _test_df = self.test_df.copy()
+        _test_df["total_prob"] = _s
 
         #(2)
-        self.test_df = self.test_df.sort_values(by = "total_prob", ascending=False)
-        top_10 = self.test_df.groupby(["user"]).head(10)
-        top_10.to_csv("output.csv",index=False)
+        _test_df = _test_df.sort_values(by = "total_prob", ascending=False)
+
+
+        top = _test_df.groupby(["user"])
+        top_10 = top.head(10)
+        top_10.to_csv("lgbm_10.csv",index=False)
+
+        top_20 = top.head(20)
+        top_20.to_csv("lgbm_20.csv",index=False)
+
+        top_30 = top.head(30)
+        top_30.to_csv("lgbm_30.csv",index=False)
+        # breakpoint()
     
 
 
