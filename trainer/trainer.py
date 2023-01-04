@@ -30,16 +30,14 @@ class GBDTTrainer():
         #             'Western', 'favorite_genre', 'maniatic', "whole_period","first_watch_year","last_watch_year","freq_rating_year","series",'rating']
 
         ####feature 실험 수정!!#########
-        self.use_features = ['user', 'item', 'release_year', 'title', 'main_director', 'Action', 'Adventure', 'Animation', 'Children',
-                    'Comedy', 'Crime', 'Documentary', 'Drama', 'Fantasy', 'Film-Noir',
-                    'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War',
-                    'Western', 'favorite_genre', 'maniatic',"whole_period",'rating']
+        self.use_features = ['user', 'item', 'release_year', 'title', 'main_director','series','favorite_genre','Action', 'Adventure', 'Animation', 'Children',
+                    'Comedy', 'Crime', 'Documentary', 'Drama', 'Fantasy', 'Film-Noir','Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War','Western',
+                    'maniatic',"whole_period","first_watch_year","last_watch_year","freq_rating_year",'rating']
 
         
-        self.cat_features = ['user', 'item', 'release_year', 'title', 'main_director', 'Action', 'Adventure', 'Animation', 'Children',
-                    'Comedy', 'Crime', 'Documentary', 'Drama', 'Fantasy', 'Film-Noir',
-                    'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War',
-                    'Western','favorite_genre',"whole_period"] #"maniatic 빼고 all" 
+        self.cat_features =  ['user', 'item', 'release_year', 'title', 'main_director','series', 'favorite_genre','Action', 'Adventure', 'Animation', 'Children',
+                    'Comedy', 'Crime', 'Documentary', 'Drama', 'Fantasy', 'Film-Noir','Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War','Western',
+                    "whole_period","first_watch_year","last_watch_year","freq_rating_year"]
 
         # self.cat_features = ['user', 'item','release_year','categorized_year_gap5',
         #             'categorized_year_gap10','title', 'main_director','main_writer',"favorite_genre"] #"maniatic 빼고 all", 행별로 어떻게 쪼개나용 
@@ -53,7 +51,7 @@ class GBDTTrainer():
         :return: A log that contains average loss and metric in this epoch.
         """
         #index로 나누고,
-        kf = KFold(n_splits = 5, shuffle = True, random_state = 42)
+        kf = KFold(n_splits = 2, shuffle = True, random_state = 42)
         sub_result = [] #fold별 확률 담는 리스트
         for idx, (train_index, valid_index) in enumerate(kf.split(self.interaction_df.index)):
             #negative sampling을 fold별로 다르게 뽑히게
@@ -157,12 +155,8 @@ class GBDTTrainer():
             np.save(f"/opt/ml/level2_movierecommendation_recsys-level3-recsys-06/saved/fold_predict/fold_{idx}.npy", fpredict)
 
             print(f"==========={idx} 종료=======")
-            breakpoint()
-             
             
         sub_result.append(total_predict) #total_predict : user X negitem : predict [[],[],[],[],[]] (5,(user X user neg item),1)
-        print(sub_result.shape)
-        breakpoint()
 
         #TODO : (1) fold별 평균 계산 후 (2)유저별 높은 확률 값을 갖는 item 반환
         _s = np.array(sub_result) #shape : (5,2억)

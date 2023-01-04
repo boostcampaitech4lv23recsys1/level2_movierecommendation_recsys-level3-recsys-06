@@ -68,7 +68,8 @@ class Preprocessor:
     def _make_dataset(self, item_dict, user_dict, use_genre):
         ###################features 실험 수정############################
         # item_use_features = ["release_year", "categorized_year_gap5", "categorized_year_gap10", "title","director","main_director","writer","main_writer","genre"]
-        item_use_features = ['release_year', 'categorized_year_gap5', 'categorized_year_gap10', 'title', 'director', 'main_director', 'writer', 'main_writer', 'genre', 'series']
+        # item_use_features = ['release_year', 'categorized_year_gap5', 'categorized_year_gap10', 'title', 'director', 'main_director', 'writer', 'main_writer', 'genre', 'series','director_genre']
+        item_use_features = ['release_year', 'categorized_year_gap5', 'categorized_year_gap10', 'title', 'director', 'main_director', 'writer', 'main_writer', 'genre', 'series', 'director_genre']
         #multi class 사용시 아래 변수 사용
         item_multi_features = ["director", "writer","genre"]
         item_df = pd.DataFrame(columns=item_use_features)
@@ -79,13 +80,14 @@ class Preprocessor:
 
         for item, values in item_dict.items():
             temp = []
-            for column, value in values.items():
-                if column in item_multi_features:
-                    temp.append(value)
-                else:
-                    if column not in item_use_features:
-                        continue
-                    temp.append(int(value[0])) #값이 여러개가 아닌 경우 0번째 값만 넣어줌, 정수형으로 바꿔줘야 함
+            if item in ["main_director", "movie", "director_genre"]:
+                continue
+            else:
+                for column, value in values.items():
+                    if column in item_multi_features:
+                        temp.append(value)
+                    else:
+                        temp.append(int(value[0])) #값이 여러개가 아닌 경우 0번째 값만 넣어줌, 정수형으로 바꿔줘야 함
             item_df.loc[item] = temp
         
         genre_class = self.genre_encoder.classes_
