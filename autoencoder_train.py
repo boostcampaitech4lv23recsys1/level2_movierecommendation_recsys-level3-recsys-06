@@ -141,14 +141,14 @@ def ae_train(config):
 if __name__ == "__main__":
     config = {
         "n_kfold": 5,
-        "n_epochs": 200,
+        "n_epochs": 20,
         "dropout_rate": 0.6,
         "lr": 0.001,
-        "batch_size": 512,
+        "batch_size": 64,
 
         "root_data": './data/train/' ,
         "data_dir": './data/train/ae_data',
-        "weight_decay": 0.00,
+        "weight_decay": 0.01,
         "num_workers": 4,
         "model_name": 'MultiDAE', # [MultiDAE, MultiVAE, RecVAE]
         "output_path": './output/auto_encoder',
@@ -157,8 +157,8 @@ if __name__ == "__main__":
         "n_users": 31360,
         "n_items": 6807,
 
-        'total_anneal_steps': 200000,
-        'anneal_cap': 0.2
+        'total_anneal_steps': 0,
+        'anneal_cap': 0.0
     }
     ae_train(config)
     

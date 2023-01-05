@@ -60,7 +60,7 @@ class AETrainer:
             
             wandb.log({"epoch": epoch, "recall epoch": recall_epoch, "best epoch": best_epoch, "train loss": train_loss, "best score": best_score})
             print(f'[Recall for Epoch {epoch}] {recall_epoch}')
-            print(f'Train loss: {train_loss:.5f} | Train loss improved: {round(last_train_loss-train_loss, 4)}')  
+            print(f'Train loss: {train_loss:.5f} | Train loss Imporved: {round(last_train_loss-train_loss, 4)}')  
             print(f'epoch에 약 {round(time.time()-epoch_stime,1)}초 걸렸습니다', '\n')
 
             last_train_loss = train_loss
@@ -103,7 +103,7 @@ class AETrainer:
             loss.backward()
             self.optimizer.step()
 
-        train_loss /= ((self.n_users//self.batch_size)+1)
+        train_loss /= self.n_users
         return train_loss
 
 

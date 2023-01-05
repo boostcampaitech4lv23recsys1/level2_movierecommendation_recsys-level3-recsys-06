@@ -51,7 +51,7 @@ def EASE_train_inference(config):
     inference_results = np.zeros((31360, 6807))
 
     print('========================Training Start========================')
-    for i in range(1, 101):
+    for i in range(1, 1001):
         print(f'================{i}번쨰 모델 학습 및 인퍼런스================')
         start_time = time.time()
 
@@ -74,7 +74,7 @@ def EASE_train_inference(config):
     inference_results[train_mark]=-np.inf
     final_10 = bn.argpartition(-inference_results, 10, axis=1)[:, :10]  # 10개만 남겨둠
 
-    total_recall_at_k = 'bagging'
+    total_recall_at_k = 'bagging1000_0_8'
     # 예측 파일을 저장함
     make_prediction_file(output_path, inference_results, config, total_recall_at_k, user_label, item_label)
     
