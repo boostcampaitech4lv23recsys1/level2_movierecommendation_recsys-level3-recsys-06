@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import torch
+import joblib
 from torchvision.utils import make_grid
 from base import BaseTrainer
 from utils import inf_loop, MetricTracker
@@ -91,7 +92,7 @@ class GBDTTrainer():
 
             #train_user에 있는 user의 negative sampling진행
             print("======negative_sampling====")
-            neg_df = _make_negative_sampling(train_user, self.item_df, self.user_df, neg_ratio=0.8, threshold=3800, sampling_mode="popular")
+            neg_df = _make_negative_sampling(train_user, self.item_df, self.user_df, neg_ratio=0.5, threshold=3800, sampling_mode="popular")
 
             print("=====positive, negative concat=========")
             train_df = pd.concat([train_df,neg_df]) #shape:
@@ -178,8 +179,13 @@ class GBDTTrainer():
 
         top_30 = top.head(30)
         top_30.to_csv("lgbm_30.csv",index=False)
-        # breakpoint()
-        
+
+        top_10.sort_values(["user","total_prob"], ascending=[True,False]).to_csv("lgb10.csv",index=False)
+        top_20.sort_values(["user","total_prob"], ascending=[True,False]).to_csv("lgb20.csv",index=False)
+        top_30.sort_values(["user","total_prob"], ascending=[True,False]).to_csv("lgb30.csv",index=False)
+
+        joblib.dump(lgb,"lgb.pkl")
+
     
 
 
