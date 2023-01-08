@@ -1,16 +1,18 @@
 import torch
+import os
 from abc import abstractmethod
 from numpy import inf
 from logger import TensorboardWriter
+from pathlib import Path
 
 
 class BaseTrainer:
     """
     Base class for all trainers
     """
-    def __init__(self, model, criterion, metric_ftns, optimizer, config):
+    def __init__(self, model, criterion, metric_ftns, optimizer, config, fold_num):
         self.config = config
-        self.logger = config.get_logger('trainer', config['trainer']['verbosity'])
+        self.fold_num = fold_num
 
         self.model = model
         self.criterion = criterion
@@ -18,6 +20,7 @@ class BaseTrainer:
         self.optimizer = optimizer
 
         cfg_trainer = config['trainer']
+        self.model_name = config['name']
         self.epochs = cfg_trainer['epochs']
         self.save_period = cfg_trainer['save_period']
         self.monitor = cfg_trainer.get('monitor', 'off')
@@ -40,7 +43,6 @@ class BaseTrainer:
         self.checkpoint_dir = config.save_dir
 
         # setup visualization writer instance                
-        self.writer = TensorboardWriter(config.log_dir, self.logger, cfg_trainer['tensorboard'])
 
         if config.resume is not None:
             self._resume_checkpoint(config.resume)
@@ -62,36 +64,28 @@ class BaseTrainer:
         for epoch in range(self.start_epoch, self.epochs + 1):
             result = self._train_epoch(epoch)
 
-            # save logged informations into log dict
-            log = {'epoch': epoch}
-            log.update(result)
-
-            # print logged informations to the screen
-            for key, value in log.items():
-                self.logger.info('    {:15s}: {}'.format(str(key), value))
-
             # evaluate model performance according to configured metric, save best checkpoint as model_best
             best = False
             if self.mnt_mode != 'off':
                 try:
                     # check whether model performance improved or not, according to specified metric(mnt_metric)
-                    improved = (self.mnt_mode == 'min' and log[self.mnt_metric] <= self.mnt_best) or \
-                               (self.mnt_mode == 'max' and log[self.mnt_metric] >= self.mnt_best)
+                    improved = (self.mnt_mode == 'min' and result[self.mnt_metric] <= self.mnt_best) or \
+                               (self.mnt_mode == 'max' and result[self.mnt_metric] >= self.mnt_best)
                 except KeyError:
-                    self.logger.warning("Warning: Metric '{}' is not found. "
+                    print("Warning: Metric '{}' is not found. "
                                         "Model performance monitoring is disabled.".format(self.mnt_metric))
                     self.mnt_mode = 'off'
                     improved = False
 
                 if improved:
-                    self.mnt_best = log[self.mnt_metric]
+                    self.mnt_best = result[self.mnt_metric]
                     not_improved_count = 0
                     best = True
                 else:
                     not_improved_count += 1
 
                 if not_improved_count > self.early_stop:
-                    self.logger.info("Validation performance didn\'t improve for {} epochs. "
+                    print("Validation performance didn\'t improve for {} epochs. "
                                      "Training stops.".format(self.early_stop))
                     break
 
@@ -115,13 +109,16 @@ class BaseTrainer:
             'monitor_best': self.mnt_best,
             'config': self.config
         }
-        filename = str(self.checkpoint_dir / 'checkpoint-epoch{}.pth'.format(epoch))
-        torch.save(state, filename)
-        self.logger.info("Saving checkpoint: {} ...".format(filename))
+        # filename = str(self.checkpoint_dir / 'checkpoint-epoch{}.pth'.format(epoch))
+        ppath = Path(os.path.join(self.checkpoint_dir, f"FOLD-{str(self.fold_num)}", f"{self.model_name}-checkpoint-epoch{epoch}.pth"))
+        ppath.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(state, str(ppath))
+        print("Saving checkpoint: {} ...".format(str(ppath)))
         if save_best:
-            best_path = str(self.checkpoint_dir / 'model_best.pth')
-            torch.save(state, best_path)
-            self.logger.info("Saving current best: model_best.pth ...")
+            bpath = Path(os.path.join(self.checkpoint_dir, f"FOLD-{str(self.fold_num)}", f"{self.model_name}-best_model.pth"))
+            bpath.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(state, str(bpath))
+            print("Saving current best: model_best.pth ...")
 
     def _resume_checkpoint(self, resume_path):
         """
