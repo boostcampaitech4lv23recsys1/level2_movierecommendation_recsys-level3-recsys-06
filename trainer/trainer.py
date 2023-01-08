@@ -36,6 +36,8 @@ class Trainer(BaseTrainer):
         self.pos_items_dict = pos_items_dict
 
         self.metric = self.metric_ftns[0]
+
+
     def _train_epoch(self, epoch):
         """
         Training logic for an epoch
@@ -56,17 +58,16 @@ class Trainer(BaseTrainer):
 
             self.optimizer.zero_grad()
             output = self.model(data)
-            output = output.view(-1, output.size(-1)) #[Batch_size, seq_len, 6808] -> [Batch_size * seq_len, 6808]
-            target = target.view(-1)
+            if self.config['name'] == 'Bert4Rec':
+                output = output.view(-1, output.size(-1)) #[Batch_size, seq_len, 6808] -> [Batch_size * seq_len, 6808]
+                target = target.view(-1)
             loss = self.criterion(output, target)
             loss.backward()
             self.optimizer.step()
             
             current = batch_idx
             total = self.len_epoch
-            epoch_iterator.set_description(
-            "[FOLD - %s] Training (%d / %d Steps) (loss=%2.5f)" % (self.fold_num, current, total, loss.item())
-            )
+            epoch_iterator.set_description("[FOLD - %s, EPOCH: %s] Training (%d / %d Steps) (loss=%2.5f)" % (self.fold_num, epoch, current, total, loss.item()))
             
             train_loss = np.append(train_loss, loss.detach().cpu().numpy())
 
@@ -80,6 +81,7 @@ class Trainer(BaseTrainer):
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
         log = {'train_loss': train_loss.mean(), 'recall': val_recallk_score}
+        
         return log
 
 
@@ -105,6 +107,7 @@ class Trainer(BaseTrainer):
         inference = pd.DataFrame(inference, columns = ['user', 'item', 'prob'])
         inference = inference.sort_values(by = 'prob', ascending = False)
 
+        return self.metric(inference, self.valid_target)
 
     def _valid_epoch_seq(self, epoch):
         """

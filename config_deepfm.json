@@ -5,18 +5,18 @@
     "arch": {
         "type": "DeepFM",
         "args": {
-            "input_dims": 5,
+            "input_dims": 12,
             "embedding_dim": 128,
-            "mlp_dims": [128, 128, 64]
+            "mlp_dims": [512, 256, 128, 64, 32]
         }
     },
     "n_fold": 5,
     "neg_ratio": 3,
-    "using_features": ["director", "writer", "genre"],
+    "using_features": ["maniatic", "favorite_genre", "first_watch_year", "last_watch_year", "whole_period", "freq_rating_year", "release_year", "series", "director", "genre"],
     "data_loader": {
         "type": "FMDataLoader",
         "args":{
-            "batch_size": 64,
+            "batch_size": 128,
             "shuffle": true,
             "num_workers": 4
         }
@@ -24,7 +24,7 @@
     "optimizer": {
         "type": "Adam",
         "args":{
-            "lr": 3e-4,
+            "lr": 4e-3,
             "weight_decay": 1e-5,
             "amsgrad": true
         }
@@ -41,7 +41,7 @@
         }
     },
     "trainer": {
-        "epochs": 100,
+        "epochs": 3,
 
         "save_dir": "saved/",
         "save_period": 1,

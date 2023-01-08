@@ -39,10 +39,14 @@ class DeepFM(BaseModel):
         #3653 3654 17
         self.user_embedding = nn.Embedding(31360, embedding_dim)
         self.item_embedding = nn.Embedding(6807, embedding_dim)
+        self.maniatic_embedding = nn.Linear(1, embedding_dim, bias = False)
+        self.favorite_genre_embedding = nn.Embedding(18, embedding_dim, padding_idx = 0)
+        self.year_embedding = nn.Embedding(88, embedding_dim, padding_idx = 0)
+        self.whole_period_embedding = nn.Embedding(6, embedding_dim, padding_idx = 0)
+        self.title_embedding = nn.Embedding(211, embedding_dim, padding_idx = 0)
         self.director_multihot = nn.EmbeddingBag(3654 + 1, embedding_dim, padding_idx = 0, mode = 'sum')
-        self.writer_multihot = nn.EmbeddingBag(3655 + 1, embedding_dim, padding_idx = 0, mode = 'sum')
         self.genre_multihot = nn.EmbeddingBag(18 + 1, embedding_dim, padding_idx = 0, mode = 'sum')
-        self.embedding_dim = 5 * embedding_dim
+        self.embedding_dim = 12 * embedding_dim
 
         mlp_layers = []
         for i, dim in enumerate(mlp_dims):
@@ -50,8 +54,9 @@ class DeepFM(BaseModel):
                 mlp_layers.append(nn.Linear(self.embedding_dim, dim))
             else:
                 mlp_layers.append(nn.Linear(mlp_dims[i-1], dim))
-            mlp_layers.append(nn.ReLU(True))
+            mlp_layers.append(nn.BatchNorm1d(dim))
             mlp_layers.append(nn.Dropout(drop_rate))
+            mlp_layers.append(nn.ReLU(True))
         mlp_layers.append(nn.Linear(mlp_dims[-1], 1))
         self.mlp_layers = nn.Sequential(*mlp_layers)
 
@@ -69,18 +74,39 @@ class DeepFM(BaseModel):
 
     def forward(self, x):
         #하드코딩된 점을 여러 feature에 따라 수정할 수 있도록 변경하기.
+        #["user_idx", "item_idx", "maniatic", "favorite_genre", "first_watch_year", "last_watch_year",
+        #"whole_period", "freq_rating_year", "release_year", "series", "director", "genre"]
         user_x = x[:, :1].long()
         item_x = x[:, 1:2].long()
-        direc_x = x[:, 2:16].long()
-        writer_x = x[:, 16:40].long()
-        genre_x = x[:, 40:].long()
+        maniatic_x = x[:, 2:3].float()
+        favorite_genre_x = x[:, 3:4].long()
+        first_watch_year_x = x[:, 4:5].long()
+        last_watch_year_x = x[:, 5:6].long()
+        whole_period_x = x[:, 6:7].long()
+        freq_rating_year_x = x[:, 7:8].long()
+        release_year_x = x[:, 8:9].long()
+        title_x = x[:, 9:10].long()
+        direc_x = x[:, 10:24].long()
+        genre_x = x[:, 24:].long()
+
         user_embed_x = self.user_embedding(user_x)
         item_embed_x = self.item_embedding(item_x)
+        maniatic_embed_x = self.maniatic_embedding(maniatic_x).unsqueeze(1)
+        favorite_genre_embed_x = self.favorite_genre_embedding(favorite_genre_x)
+        first_watch_year_embed_x = self.year_embedding(first_watch_year_x)
+        last_watch_year_embed_x = self.year_embedding(last_watch_year_x)
+        whole_period_embed_x = self.whole_period_embedding(whole_period_x)
+        freq_rating_year_embed_x = self.year_embedding(whole_period_x)
+        release_year_embed_x = self.year_embedding(release_year_x)
+        title_embed_x = self.title_embedding(title_x)
+
         direc_embed_x = self.director_multihot(direc_x).unsqueeze(1)
-        writer_embed_x = self.writer_multihot(writer_x).unsqueeze(1)
         genre_embed_x = self.genre_multihot(genre_x).unsqueeze(1)
 
-        embed_x = torch.cat([user_embed_x, item_embed_x, direc_embed_x, writer_embed_x, genre_embed_x], dim = 1)
+        embed_x = torch.cat([user_embed_x, item_embed_x, maniatic_embed_x, \
+                            favorite_genre_embed_x, first_watch_year_embed_x, last_watch_year_embed_x, \
+                            whole_period_embed_x, freq_rating_year_embed_x, release_year_embed_x, \
+                            title_embed_x, direc_embed_x, genre_embed_x], dim = 1)
         
         #fm component
         fm_y = self.fm(embed_x).squeeze(1)

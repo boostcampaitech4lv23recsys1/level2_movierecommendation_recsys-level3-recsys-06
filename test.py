@@ -21,6 +21,17 @@ from preprocess.preprocess import Preprocessor
 
 INF = int(1e9)
 
+def recommendk(save_dir, grouped, user_encoder, item_encoder, k = 10):
+    top = grouped.head(k)
+    top = top.sort_values(by=['user', 'prob'], ascending=[True, False])
+    top = top[['user', 'item']]
+    top = top.astype('int')
+    top['user'] = user_encoder.inverse_transform(top['user'])
+    top['item'] = item_encoder.inverse_transform(top['item'])
+
+    opath = Path(os.path.join(save_dir, f"output_{k}.csv"))
+    opath.parent.mkdir(parents=True, exist_ok=True)
+    top.to_csv(str(opath), index = False)
 
 def main(config):
     asset_dir = "/opt/ml/level2_movierecommendation_recsys-level3-recsys-06/saved/asset"
@@ -34,6 +45,9 @@ def main(config):
     with open(os.path.join(asset_dir, "user_dict.pkl"), 'rb') as f:
         user_dict = pickle.load(f)
 
+    with open(os.path.join(asset_dir, "item_popular.pkl"), 'rb') as f:
+        neg_populars_dict = pickle.load(f)
+
     train_df = interaction_df
 
     pos_items_dict = defaultdict(set)
@@ -43,23 +57,17 @@ def main(config):
     for name, group in tqdm(grouped):
         pos_items_dict[name].update(set(list(group['item'])))
 
+    for user in neg_populars_dict.keys():
+        neg_populars_dict[user] = neg_populars_dict[user][:1000]
 
     for user in tqdm(train_df['user'].unique()):
         neg_items = set([x for x in all_items if x not in pos_items_dict[user]])
-        neg_items_dict[user].update(neg_items)
-    """
-    Debugging Mode
-    """
-    # for user in neg_items_dict.keys():
-    #     neg_items_dict[user] = set(list(neg_items_dict[user])[:20])
+        neg_items_dict[user].update(neg_items & set(neg_populars_dict[user]))
 
-    """
-    End
-    """
-    
+    total_length = [len(neg_items_dict[user]) for user in neg_items_dict.keys()]
+    total_length = sum(total_length)
+    nfold_probs = np.zeros((total_length, config['n_fold']))
     for fold_num in range(1, config['n_fold']+1):
-        total_length = [len(neg_items_dict[user]) for user in neg_items_dict.keys()]
-        total_length = sum(total_length)
         
         if config['name'] == 'DeepFM':
             testset = StaticTestDataset(neg_items_dict, user_dict, item_dict, config)
@@ -87,55 +95,69 @@ def main(config):
         model = model.to(device)
         model.eval()
 
-        infer_list = []
-        nfold_probs = np.zeros((total_length, config['n_fold']))
-        with torch.no_grad():
-            for user, tokens in tqdm(test_loader):
-                user = user.numpy()
-                tokens = tokens.to(device)
-                output = model(tokens)
+        if config['name'] == 'DeepFM':
+            infer_list = []
+            with torch.no_grad():
+                for data in tqdm(test_loader):
+                    data = data.to(device)
+                    output = model(data)
+                    prob = output.detach().cpu().numpy()[:, np.newaxis]
+                    info = data[:, :2].detach().cpu().numpy()
+                    infos = np.concatenate([info, prob], axis = 1)
+                    infer_list.append(infos)
 
-                output = output[:, -1, :]
-                output = F.softmax(output, dim = -1)
-                output = output.detach().cpu().numpy()
+            inference = np.concatenate(infer_list, axis = 0)
+            probs = inference[:, 2]
+            nfold_probs[:, fold_num-1] = probs
 
-                for idx in range(test_loader.batch_size):
-                    user_num = int(user[idx].item())
-                    user_probs = output[idx]
-                    infos = []
-                    for item_num in range(6808):
-                        if item_num == 0:
-                            continue
-                        if (item_num - 1) in pos_items_dict[user_num]:
-                            infos.append(np.array([user_num, item_num-1, -INF])[np.newaxis, :])
-                        else:
-                            infos.append(np.array([user_num, item_num-1, user_probs[item_num]])[np.newaxis, :])
-                    temp = np.concatenate(infos, axis = 0)
-                    infer_list.append(temp)
-        inference = np.concatenate(infer_list, axis = 0)
-        indices = np.where(inference[:, 2] > 0)[0]
-        inference = inference[indices]
-        probs = inference[:, 2]
-        nfold_probs[:, fold_num-1] = probs
+            if fold_num == config['n_fold']:
+                nfold_prob = nfold_probs.mean(axis = 1)
+                inference[:, 2] = nfold_prob
+                inference = pd.DataFrame(inference, columns = ['user', 'item', 'prob'])
+                inference = inference.sort_values(by = 'prob', ascending = False)
+                
+        elif config['name'] == 'Bert4Rec':
+            infer_list = []
+            nfold_probs = np.zeros((total_length, config['n_fold']))
+            with torch.no_grad():
+                for user, tokens in tqdm(test_loader):
+                    user = user.numpy()
+                    tokens = tokens.to(device)
+                    output = model(tokens)
 
-        if fold_num == config['n_fold']:
-            nfold_prob = nfold_probs.mean(axis = 1)
-            inference[:, 2] = nfold_prob
-            inference = pd.DataFrame(inference, columns = ['user', 'item', 'prob'])
-            inference = inference.sort_values(by = 'prob', ascending = False)
+                    output = output[:, -1, :]
+                    output = F.softmax(output, dim = -1)
+                    output = output.detach().cpu().numpy()
+
+                    for idx in range(test_loader.batch_size):
+                        user_num = int(user[idx].item())
+                        user_probs = output[idx]
+                        infos = []
+                        for item_num in range(6808):
+                            if item_num == 0:
+                                continue
+                            if (item_num - 1) in pos_items_dict[user_num]:
+                                infos.append(np.array([user_num, item_num-1, -INF])[np.newaxis, :])
+                            else:
+                                infos.append(np.array([user_num, item_num-1, user_probs[item_num]])[np.newaxis, :])
+                        temp = np.concatenate(infos, axis = 0)
+                        infer_list.append(temp)
+            inference = np.concatenate(infer_list, axis = 0)
+            indices = np.where(inference[:, 2] > 0)[0]
+            inference = inference[indices]
+            probs = inference[:, 2]
+            nfold_probs[:, fold_num-1] = probs
+
+            if fold_num == config['n_fold']:
+                nfold_prob = nfold_probs.mean(axis = 1)
+                inference[:, 2] = nfold_prob
+                inference = pd.DataFrame(inference, columns = ['user', 'item', 'prob'])
+                inference = inference.sort_values(by = 'prob', ascending = False)
 
 
     grouped = inference.groupby('user')
-    top_10 = grouped.head(10)
-    top_10 = top_10.sort_values(by=['user', 'prob'], ascending=[True, False])
-    top_10 = top_10[['user', 'item']]
-    top_10 = top_10.astype('int')
-    top_10['user'] = user_encoder.inverse_transform(top_10['user'])
-    top_10['item'] = item_encoder.inverse_transform(top_10['item'])
-
-    opath = Path(os.path.join(save_dir, "output.csv"))
-    opath.parent.mkdir(parents=True, exist_ok=True)
-    top_10.to_csv(str(opath), index = False)
+    recommendk(save_dir, grouped, user_encoder, item_encoder, k = 30)
+    recommendk(save_dir, grouped, user_encoder, item_encoder, k = 10)
 
 
 if __name__ == '__main__':

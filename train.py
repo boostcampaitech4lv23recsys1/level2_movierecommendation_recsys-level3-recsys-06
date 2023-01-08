@@ -47,15 +47,23 @@ def main(config):
         item_dict = pickle.load(f)
     with open(os.path.join(asset_dir, "user_dict.pkl"), 'rb') as f:
         user_dict = pickle.load(f)
+
+    with open(os.path.join(asset_dir, "item_popular.pkl"), 'rb') as f:
+        neg_populars_dict = pickle.load(f)
+    """
+    popular top 200
+    """
+    for user in neg_populars_dict.keys():
+        neg_populars_dict[user] = neg_populars_dict[user][:200]
         
     
     #TODO KFOLD Validation
     total_index = np.arange(len(interaction_df))
+    neg_val_dict = collections.defaultdict(set)
     kf = KFold(n_splits = config['n_fold'], shuffle = True, random_state = SEED)
     for idx, (train_index, valid_index) in enumerate(kf.split(total_index)):
         train_df = interaction_df.iloc[train_index].reset_index(drop = True)
         valid_df = interaction_df.iloc[valid_index].reset_index(drop = True)
-
 
         print(f"[BEFORE CONCAT SHAPE] {train_df.shape}, {valid_df.shape}")
 
@@ -65,10 +73,9 @@ def main(config):
         for name, group in valid_grouped:
             if len(group) > 10:
                 indices = np.random.choice(group.index, 10, replace = False)
-                valid_for_test_idx_list.extend(list(indices))
             else:
                 indices = group.index
-                valid_for_test_idx_list.extend(list(indices))
+            valid_for_test_idx_list.extend(list(indices))
         
         valid_for_test_idx_set = set(valid_for_test_idx_list)
         valid_for_train_idx_list = list(valid_for_train_idx_list - valid_for_test_idx_set)
@@ -79,6 +86,13 @@ def main(config):
         train_df = pd.concat([train_df, valid_for_train]).reset_index(drop = True)
         valid_df = valid_df.reset_index(drop = True)
 
+        """
+        calculate item_set for neg_val_dict
+        """
+        grouped = valid_df.groupby('user')
+        for name, group in grouped:
+            neg_val_dict[name].update(set(group['item']))
+
         valid_grouped2 = valid_df.groupby('user')
         cnt = 0
         for name, group in valid_grouped2:
@@ -88,15 +102,22 @@ def main(config):
 
         pos_items_dict = collections.defaultdict(set)
         neg_items_dict = collections.defaultdict(set)
+        neg_items_dict_for_valid = collections.defaultdict(set)
+
         grouped = train_df.groupby('user')
         
         for name, group in tqdm(grouped):
             pos_items_dict[name].update(set(list(group['item'])))
 
-
         for user in tqdm(train_df['user'].unique()):
             neg_items = set([x for x in all_items if x not in pos_items_dict[user]])
-            neg_items_dict[user].update(neg_items)
+            neg_items_random_sampling = set(np.random.choice(list(neg_items), 800, replace = False))
+            neg_popular_items = set(neg_populars_dict[user])
+            neg_items_for_train = (neg_items & neg_popular_items) | neg_val_dict[user] # popular top 200 민주가 준 것이 유저가 안본 것 중에서 popular item을 순차적으로 뽑아낸 것을 줬기 때문에, 200개의 모든 샘플이 생기는 것이 맞다.
+            neg_items_for_valid = neg_items_random_sampling | neg_popular_items | neg_val_dict[user]
+            neg_items_dict[user].update(neg_items_for_train)
+            neg_items_dict_for_valid[user].update(neg_items_for_valid)
+
 
         if config['name'] == "Bert4Rec":
             users = collections.defaultdict(list)
@@ -105,19 +126,19 @@ def main(config):
 
         if config['name'] == 'DeepFM':
             trainset = StaticDataset(train_df, neg_items_dict, user_dict, item_dict, config)
-            validset = StaticTestDataset(neg_items_dict, user_dict, item_dict, config)
+            validset = StaticTestDataset(neg_items_dict_for_valid, user_dict, item_dict, config)
         elif config['name'] == 'Bert4Rec':
             #TODO: Sequential Dataset으로 이름변경하기.
             trainset = SeqTrainDataset(users, 31360, 6807, config['arch']['args']['max_len'], config['mask_prob'])
             validset = SeqTestDataset(users, 31360, 6807, config['arch']['args']['max_len'], config['mask_prob'])
 
         train_loader = config.init_obj('data_loader', module_data, trainset, config)
-        # train_loader = DataLoader(trainset, batch_size=32, shuffle=True, num_workers=4)
         valid_loader = config.init_obj('data_loader', module_data, validset, config)
 
         train_batch = next(iter(train_loader))
-        print(type(train_batch))
+        print(f"[TRAIN BATCH SHAPE]: {train_batch[0].shape}")
         valid_batch = next(iter(valid_loader))
+        print(f"[VALID BATCH SHAPE]: {valid_batch.shape}")
 
 
         device, device_ids = prepare_device(config['n_gpu'])
