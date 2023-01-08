@@ -11,7 +11,7 @@ class Preprocessor:
         self.train_data_path = os.path.join(self.root_dir, "train_ratings.csv")
         self.title_data_path = os.path.join(self.root_dir, "titles.tsv")
         self.asset_dir = "/opt/ml/level2_movierecommendation_recsys-level3-recsys-06/saved/asset"
-        self.label_encoders_path = os.path.join(self.asset_dir, "fm_labels.pkl")
+        self.label_encoders_path = os.path.join(self.asset_dir, "labels.pkl")
         with open(self.label_encoders_path, 'rb') as f:
             label_encoders = pickle.load(f)
         # 0: 감독/작가 라벨
@@ -29,7 +29,7 @@ class Preprocessor:
     def _load_train_dataset(self):
         interaction_df = pd.read_csv(self.train_data_path, low_memory = False)
         title_df = pd.read_csv(self.title_data_path, sep = '\t', low_memory = False)
-        
+        interaction_df.sort_values(['user', 'time'], inplace=True)
         return interaction_df, title_df
 
     

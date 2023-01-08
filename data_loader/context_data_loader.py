@@ -18,9 +18,17 @@ class StaticDataset(Dataset):
         self.director_maxlen = 14
         self.writer_maxlen = 24
         self.genre_maxlen = 10
-
-        self.user_features = ['favorite_genre', 'maniatic']
-        self.item_features = ['release_year', 'categorized_year_gap5', 'categorized_year_gap10', 'title', 'director', 'main_director', 'writer', 'main_writer', 'genre']
+        #["user_idx", "item_idx", "maniatic", "favorite_genre", "first_watch_year", "last_watch_year", "whole_period", "freq_rating_year", "release_year", "series", "director", "genre"]
+        # tensor 내의 자리 차지[1, 1, 1(Linear), 1, 1, 1, 1, 1, 1, 1, 14, 10]
+        """
+        maniatic -> Linear Embedding
+        favorite_genre(18, embedding_dim, padding_idx = 0(이건 맞춰주기 걍)) -> 새로 만들어주기
+        year(87 + 1, embedding_dim, padding_idx = 0),
+        whole_period(6, embedding_dim, padding_idx = 0)
+        title_series(211, embedding_dim, padding_idx = 0)
+        """
+        self.user_features = ['favorite_genre', 'maniatic', "first_watch_year", "last_watch_year", "whole_period", "freq_rating_year"]
+        self.item_features = ['release_year', 'series', 'director', 'genre'] # 2 + 8 + 14(director) + 10(genre)
         self.neg_items_dict = neg_items_dict
 
         self.user_dict = user_dict
@@ -37,9 +45,12 @@ class StaticDataset(Dataset):
         elif name == 'genre':
             max_len = self.genre_maxlen
             data = np.array(data_dict[idx][name]) + 1 # Multi-hot with padding
-        else:
+        elif name == 'maniatic':
             max_len = 1
             data = np.array(data_dict[idx][name])
+        else:
+            max_len = 1
+            data = np.array(data_dict[idx][name]) + 1
         
         data_features = np.zeros(max_len)
 
@@ -99,8 +110,8 @@ class StaticTestDataset(Dataset):
         self.writer_maxlen = 24
         self.genre_maxlen = 10
 
-        self.user_features = ['favorite_genre', 'maniatic']
-        self.item_features = ['release_year', 'categorized_year_gap5', 'categorized_year_gap10', 'title', 'director', 'main_director', 'writer', 'main_writer', 'genre']
+        self.user_features = ['favorite_genre', 'maniatic', "first_watch_year", "last_watch_year", "whole_period", "freq_rating_year"]
+        self.item_features = ['release_year', 'series', 'director', 'genre']
         self.neg_items_dict = neg_items_dict
 
         self.user_dict = user_dict
@@ -116,9 +127,12 @@ class StaticTestDataset(Dataset):
         elif name == 'genre':
             max_len = self.genre_maxlen
             data = np.array(data_dict[idx][name]) + 1 # Multi-hot with padding
-        else:
+        elif name == 'maniatic':
             max_len = 1
             data = np.array(data_dict[idx][name])
+        else:
+            max_len = 1
+            data = np.array(data_dict[idx][name]) + 1
         
         data_features = np.zeros(max_len)
 
