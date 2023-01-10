@@ -1,0 +1,13 @@
+program: autoencoder_train.py
+method: grid
+name: Movie_Rec
+metric:
+  name: total_recall_at_k
+  goal: maximize
+parameters:
+  dropout_rate:
+    values: [0.5, 0.55, 0.6]
+  batch_size:
+    values: [512, 1024]
+  n_epochs:
+    values: [1, 2]

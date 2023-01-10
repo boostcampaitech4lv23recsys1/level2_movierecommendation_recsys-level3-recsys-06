@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+from utils import Ensemble
 from utils.ensemble_class import Ensemble
 import argparse
 
