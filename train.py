@@ -18,11 +18,12 @@ from data_loader.sequential_data_loader import SeqTrainDataset, SeqTestDataset
 from torch.utils.data import DataLoader
 
 from parse_config import ConfigParser
-from trainer import Trainer
+from trainer import GBDTTrainer
 from utils import prepare_device
 from sklearn.model_selection import KFold
-from preprocess.preprocess import Preprocessor
-
+from preprocess.preprocessing import Preprocessor
+from base import BaseTrainer
+from trainer import Trainer
 
 
 # fix random seeds for reproducibility
@@ -55,11 +56,22 @@ def main(config):
     """
     for user in neg_populars_dict.keys():
         neg_populars_dict[user] = neg_populars_dict[user][:200]
-        
     
     #TODO KFOLD Validation
     total_index = np.arange(len(interaction_df))
     neg_val_dict = collections.defaultdict(set)
+
+    if config["name"] == "LGBM":
+        item_df, user_df= preprocessor._make_dataset(item_dict, user_dict, True)
+        print("=====print shape=====")
+        print(item_df.shape)
+        print(user_df.shape)
+
+        print("==========test_df 생성===========") #20G
+        gbdt_test_df = preprocessor._make_test_dataset()
+        print("test_df.shape", gbdt_test_df.shape)
+
+
     kf = KFold(n_splits = config['n_fold'], shuffle = True, random_state = SEED)
     for idx, (train_index, valid_index) in enumerate(kf.split(total_index)):
         train_df = interaction_df.iloc[train_index].reset_index(drop = True)
@@ -86,91 +98,103 @@ def main(config):
         train_df = pd.concat([train_df, valid_for_train]).reset_index(drop = True)
         valid_df = valid_df.reset_index(drop = True)
 
-        """
-        calculate item_set for neg_val_dict
-        """
-        grouped = valid_df.groupby('user')
-        for name, group in grouped:
-            neg_val_dict[name].update(set(group['item']))
+        if config["type"] == "DL":
 
-        valid_grouped2 = valid_df.groupby('user')
-        cnt = 0
-        for name, group in valid_grouped2:
-            cnt += 1
-        print(f"[CNT]: {cnt}")
-        print(f"[AFTER CONCAT SHAPE] {train_df.shape}, {valid_df.shape}")
+            """
+            calculate item_set for neg_val_dict
+            """
+            grouped = valid_df.groupby('user')
+            for name, group in grouped:
+                neg_val_dict[name].update(set(group['item']))
 
-        pos_items_dict = collections.defaultdict(set)
-        neg_items_dict = collections.defaultdict(set)
-        neg_items_dict_for_valid = collections.defaultdict(set)
+            valid_grouped2 = valid_df.groupby('user')
+            cnt = 0
+            for name, group in valid_grouped2:
+                cnt += 1
+            print(f"[CNT]: {cnt}")
+            print(f"[AFTER CONCAT SHAPE] {train_df.shape}, {valid_df.shape}")
 
-        grouped = train_df.groupby('user')
+            pos_items_dict = collections.defaultdict(set)
+            neg_items_dict = collections.defaultdict(set)
+            neg_items_dict_for_valid = collections.defaultdict(set)
+
+            grouped = train_df.groupby('user')
+            
+            for name, group in tqdm(grouped):
+                pos_items_dict[name].update(set(list(group['item'])))
+
+            for user in tqdm(train_df['user'].unique()):
+                neg_items = set([x for x in all_items if x not in pos_items_dict[user]])
+                neg_items_random_sampling = set(np.random.choice(list(neg_items), 800, replace = False))
+                neg_popular_items = set(neg_populars_dict[user])
+                neg_items_for_train = (neg_items & neg_popular_items) | neg_val_dict[user] # popular top 200 민주가 준 것이 유저가 안본 것 중에서 popular item을 순차적으로 뽑아낸 것을 줬기 때문에, 200개의 모든 샘플이 생기는 것이 맞다.
+                neg_items_for_valid = neg_items_random_sampling | neg_popular_items | neg_val_dict[user]
+                neg_items_dict[user].update(neg_items_for_train)
+                neg_items_dict_for_valid[user].update(neg_items_for_valid)
+
+
+            if config['name'] == "Bert4Rec":
+                users = collections.defaultdict(list)
+                for u, i in zip(train_df['user'], train_df['item']):
+                    users[u].append(i)
+
+            if config['name'] == 'DeepFM':
+                trainset = StaticDataset(train_df, neg_items_dict, user_dict, item_dict, config)
+                validset = StaticTestDataset(neg_items_dict_for_valid, user_dict, item_dict, config)
+            elif config['name'] == 'Bert4Rec':
+                #TODO: Sequential Dataset으로 이름변경하기.
+                trainset = SeqTrainDataset(users, 31360, 6807, config['arch']['args']['max_len'], config['mask_prob'])
+                validset = SeqTestDataset(users, 31360, 6807, config['arch']['args']['max_len'], config['mask_prob'])
+
+            train_loader = config.init_obj('data_loader', module_data, trainset, config)
+            valid_loader = config.init_obj('data_loader', module_data, validset, config)
+
+            train_batch = next(iter(train_loader))
+            print(f"[TRAIN BATCH SHAPE]: {train_batch[0].shape}")
+            valid_batch = next(iter(valid_loader))
+            print(f"[VALID BATCH SHAPE]: {valid_batch.shape}")
+
+
+            device, device_ids = prepare_device(config['n_gpu'])
+            if config['name'] == 'DeepFM':
+                model = config.init_obj('arch', module_arch)
+            elif config['name'] == 'Bert4Rec':
+                model = config.init_obj('arch', module_arch, device)
+            model = model.to(device)
+
+            # get function handles of loss and metrics
+            criterion = getattr(module_loss, config['loss'])
+            metrics = [getattr(module_metric, met) for met in config['metrics']]
+
+            # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
+            trainable_params = filter(lambda p: p.requires_grad, model.parameters())
+            optimizer = config.init_obj('optimizer', torch.optim, trainable_params)
+            lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
+
+            trainer = Trainer(model, criterion, metrics, optimizer,
+                            config=config,
+                            device=device,
+                            data_loader=train_loader,
+                            valid_loader = valid_loader,
+                            valid_target = valid_df,
+                            lr_scheduler=lr_scheduler,
+                            fold_num = idx + 1,
+                            pos_items_dict = pos_items_dict)
+
+            trainer.train()
+
+        if config["name"] == "LGBM":
+            train_df = pd.concat([train_df, valid_for_train]).reset_index(drop = True)
+            valid_df = valid_df.reset_index(drop = True)
+
+            trainer = GBDTTrainer(config, train_df, valid_df, gbdt_test_df, item_df, user_df,len(user_df))
+            trainer._train_epoch(5)
+    
+    if config["name"] == "LGBM":
+        trainer.make_csv()
+        breakpoint()
         
-        for name, group in tqdm(grouped):
-            pos_items_dict[name].update(set(list(group['item'])))
-
-        for user in tqdm(train_df['user'].unique()):
-            neg_items = set([x for x in all_items if x not in pos_items_dict[user]])
-            neg_items_random_sampling = set(np.random.choice(list(neg_items), 800, replace = False))
-            neg_popular_items = set(neg_populars_dict[user])
-            neg_items_for_train = (neg_items & neg_popular_items) | neg_val_dict[user] # popular top 200 민주가 준 것이 유저가 안본 것 중에서 popular item을 순차적으로 뽑아낸 것을 줬기 때문에, 200개의 모든 샘플이 생기는 것이 맞다.
-            neg_items_for_valid = neg_items_random_sampling | neg_popular_items | neg_val_dict[user]
-            neg_items_dict[user].update(neg_items_for_train)
-            neg_items_dict_for_valid[user].update(neg_items_for_valid)
-
-
-        if config['name'] == "Bert4Rec":
-            users = collections.defaultdict(list)
-            for u, i in zip(train_df['user'], train_df['item']):
-                users[u].append(i)
-
-        if config['name'] == 'DeepFM':
-            trainset = StaticDataset(train_df, neg_items_dict, user_dict, item_dict, config)
-            validset = StaticTestDataset(neg_items_dict_for_valid, user_dict, item_dict, config)
-        elif config['name'] == 'Bert4Rec':
-            #TODO: Sequential Dataset으로 이름변경하기.
-            trainset = SeqTrainDataset(users, 31360, 6807, config['arch']['args']['max_len'], config['mask_prob'])
-            validset = SeqTestDataset(users, 31360, 6807, config['arch']['args']['max_len'], config['mask_prob'])
-
-        train_loader = config.init_obj('data_loader', module_data, trainset, config)
-        valid_loader = config.init_obj('data_loader', module_data, validset, config)
-
-        train_batch = next(iter(train_loader))
-        print(f"[TRAIN BATCH SHAPE]: {train_batch[0].shape}")
-        valid_batch = next(iter(valid_loader))
-        print(f"[VALID BATCH SHAPE]: {valid_batch.shape}")
-
-
-        device, device_ids = prepare_device(config['n_gpu'])
-        if config['name'] == 'DeepFM':
-            model = config.init_obj('arch', module_arch)
-        elif config['name'] == 'Bert4Rec':
-            model = config.init_obj('arch', module_arch, device)
-        model = model.to(device)
-
-        # get function handles of loss and metrics
-        criterion = getattr(module_loss, config['loss'])
-        metrics = [getattr(module_metric, met) for met in config['metrics']]
-
-        # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
-        trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-        optimizer = config.init_obj('optimizer', torch.optim, trainable_params)
-        lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
-
-        trainer = Trainer(model, criterion, metrics, optimizer,
-                        config=config,
-                        device=device,
-                        data_loader=train_loader,
-                        valid_loader = valid_loader,
-                        valid_target = valid_df,
-                        lr_scheduler=lr_scheduler,
-                        fold_num = idx + 1,
-                        pos_items_dict = pos_items_dict)
-
-        trainer.train()
-
-
-
+        
 if __name__ == '__main__':
     args = argparse.ArgumentParser(description='PyTorch Template')
     args.add_argument('-c', '--config', default='config_deepfm.json', type=str,

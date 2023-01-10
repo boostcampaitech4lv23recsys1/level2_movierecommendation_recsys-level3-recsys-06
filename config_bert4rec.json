@@ -1,7 +1,7 @@
 {
     "name": "Bert4Rec",
     "n_gpu": 1,
-
+    "type": "DL",
     "arch": {
         "type": "BERT4Rec",
         "args": {

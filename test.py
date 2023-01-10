@@ -17,7 +17,7 @@ from data_loader.sequential_data_loader import SeqTrainDataset, SeqTestDataset
 
 from collections import defaultdict
 from pathlib import Path
-from preprocess.preprocess import Preprocessor
+from preprocess.preprocessing import Preprocessor
 
 INF = int(1e9)
 

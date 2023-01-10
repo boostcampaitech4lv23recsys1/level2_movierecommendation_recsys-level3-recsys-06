@@ -1,3 +1,4 @@
 data/
 .DS_Store
-saved
+__pycache__
+saved/
