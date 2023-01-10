@@ -4,3 +4,5 @@ saved_model/
 wandb/
 __pycache__/
 .DS_Store
+__pycache__
+saved/

@@ -1,0 +1,26 @@
+{
+    "name": "LGBM",
+    "n_gpu": 1,
+    "type": "ML",
+
+    "n_fold": 5,
+    "trainer": {
+        "epochs": 3,
+
+        "save_dir": "saved/",
+        "save_period": 1,
+        "verbosity": 1,
+        
+        "monitor": "max recall",
+        "early_stop": 3
+
+    },
+    "model_saved" : 1,
+    "using_features": ["user", "item", "release_year", "title", "main_director","series","favorite_genre","Action", "Adventure", "Animation", "Children",
+"Comedy", "Crime", "Documentary", "Drama", "Fantasy", "Film-Noir","Horror", "Musical", "Mystery", "Romance", "Sci-Fi", "Thriller", "War","Western",
+    "maniatic","whole_period","first_watch_year","last_watch_year","freq_rating_year","rating"],
+    "cat_features": ["user", "item", "release_year", "title", "main_director","series", "favorite_genre","Action", "Adventure", "Animation", "Children",
+                    "Comedy", "Crime", "Documentary", "Drama", "Fantasy", "Film-Noir","Horror", "Musical", "Mystery", "Romance", "Sci-Fi", "Thriller", "War","Western",
+                    "whole_period","first_watch_year","last_watch_year","freq_rating_year"]
+}
+
