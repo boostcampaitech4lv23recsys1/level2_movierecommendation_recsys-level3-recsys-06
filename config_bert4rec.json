@@ -1,0 +1,58 @@
+{
+    "name": "Bert4Rec",
+    "n_gpu": 1,
+    "type": "DL",
+    "arch": {
+        "type": "BERT4Rec",
+        "args": {
+            "num_user": 31360,
+            "num_item": 6807, 
+            "hidden_units": 64,
+            "num_heads": 4,
+            "num_layers": 2,
+            "max_len": 512,
+            "dropout_rate": 0.2
+        }
+    },
+    "n_fold": 5,
+
+    "mask_prob": 0.15,
+    "data_loader": {
+        "type": "SeqDataLoader",
+        "args":{
+            "batch_size": 64,
+            "shuffle": true,
+            "num_workers": 4
+        }
+    },
+    "optimizer": {
+        "type": "Adam",
+        "args":{
+            "lr": 1e-3,
+            "weight_decay": 0,
+            "amsgrad": true
+        }
+    },
+    "loss": "ce_loss",
+    "metrics": [
+        "recallk"
+    ],
+    "lr_scheduler": {
+        "type": "StepLR",
+        "args": {
+            "step_size": 50,
+            "gamma": 0.1
+        }
+    },
+    "trainer": {
+        "epochs": 100,
+
+        "save_dir": "saved/",
+        "save_period": 1,
+        "verbosity": 1,
+        
+        "monitor": "max recall",
+        "early_stop": 3
+
+    }
+}

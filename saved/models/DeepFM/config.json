@@ -1,29 +1,39 @@
 {
     "name": "DeepFM",
     "n_gpu": 1,
+    "type": "DL",
     "arch": {
         "type": "DeepFM",
         "args": {
-            "input_dims": 5,
+            "input_dims": 12,
             "embedding_dim": 128,
             "mlp_dims": [
+                512,
+                256,
                 128,
-                128,
-                64
+                64,
+                32
             ]
         }
     },
     "n_fold": 5,
     "neg_ratio": 3,
     "using_features": [
+        "maniatic",
+        "favorite_genre",
+        "first_watch_year",
+        "last_watch_year",
+        "whole_period",
+        "freq_rating_year",
+        "release_year",
+        "series",
         "director",
-        "writer",
         "genre"
     ],
     "data_loader": {
         "type": "FMDataLoader",
         "args": {
-            "batch_size": 64,
+            "batch_size": 128,
             "shuffle": true,
             "num_workers": 4
         }
@@ -31,7 +41,7 @@
     "optimizer": {
         "type": "Adam",
         "args": {
-            "lr": 0.0003,
+            "lr": 0.004,
             "weight_decay": 1e-05,
             "amsgrad": true
         }
@@ -48,7 +58,7 @@
         }
     },
     "trainer": {
-        "epochs": 100,
+        "epochs": 3,
         "save_dir": "saved/",
         "save_period": 1,
         "verbosity": 1,
