@@ -41,7 +41,6 @@ class Preprocessor:
 
         
 
-    
     def _load_train_dataset(self):
         interaction_df = pd.read_csv(self.train_data_path, low_memory = False)
         title_df = pd.read_csv(self.title_data_path, sep = '\t', low_memory = False)
@@ -61,14 +60,13 @@ class Preprocessor:
 
         return interaction_df, title_df
 
+
     def _preprocess_testset(self):
         interaction_df, title_df = self._preprocess_dataset()
         return interaction_df, title_df, self.user_encoder, self.item_encoder
 
+
     def _make_dataset(self, item_dict, user_dict, use_genre):
-        ###################features 실험 수정############################
-        # item_use_features = ["release_year", "categorized_year_gap5", "categorized_year_gap10", "title","director","main_director","writer","main_writer","genre"]
-        # item_use_features = ['release_year', 'categorized_year_gap5', 'categorized_year_gap10', 'title', 'director', 'main_director', 'writer', 'main_writer', 'genre', 'series','director_genre']
         item_use_features = ['release_year', 'categorized_year_gap5', 'categorized_year_gap10', 'title', 'director', 'main_director', 'writer', 'main_writer', 'genre', 'series', 'director_genre']
         #multi class 사용시 아래 변수 사용
         item_multi_features = ["director", "writer","genre"]
@@ -124,11 +122,8 @@ class Preprocessor:
         self.user_df = user_df
         
         return item_df, user_df
+
     
-    #Todo : interaction을 통해 item : count dict 생성, kfold 전 후에 사용할 수 있도록 구현, 일단 전 기준..??
-    
-    
-    #Todo : test dataset 생성, 처음부터 user가 보지 않은 영화의 prob를 뽑는다.
     def _make_test_dataset(self):
         df = pd.DataFrame(columns=["user", "item"])
         _user = []
@@ -145,15 +140,8 @@ class Preprocessor:
         df["user"] = np.array(_user)
         df["item"] = np.array(_item)
 
-
-        #item, user side information merge
-        #itemdf, userdf 먼저 만들고 
-        # df = df.merge(self.item_df,how="left",on="item").merge(self.user_df,how="left",on="user")
-        # 
-        # user별로 grouped하고
-        
-        #df : [user, item] -> user * item 안본 개수 만큼
         return df
+
 
 def _make_negative_sampling(train_user, item_df, user_df, neg_ratio, threshold, sampling_mode): #need: item_popular
     asset_dir = "/opt/ml/level2_movierecommendation_recsys-level3-recsys-06/saved/asset"
@@ -177,10 +165,7 @@ def _make_negative_sampling(train_user, item_df, user_df, neg_ratio, threshold, 
             values = values[:threshold] #인기도 상위 몇까지 자를지
             positive_num = user_item_count[user] #해당 유저의 interaction item 개수
             negative_num = int(positive_num * neg_ratio) #negative 개수
-            # print("values len :", len(values))
-            # print("positive_num:",positive_num)
-            # print("negative_num:", negative_num)
-            # print("user", user)
+            
             negative_item = np.random.choice(values, negative_num, replace=False) #replace = False : 중복 허용 x
 
             
@@ -200,8 +185,6 @@ def _make_negative_sampling(train_user, item_df, user_df, neg_ratio, threshold, 
     return df
                 
         
-
-
 if __name__ == '__main__':
     preprocessor = Preprocessor()
     preprocessor._load_train_dataset()

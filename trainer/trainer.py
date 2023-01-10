@@ -103,7 +103,7 @@ class GBDTTrainer():
         self.fold_predict.append(total_predict)
 
     def make_csv(self):
-        #TODO : (1) fold별 평균 계산 후 (2)유저별 높은 확률 값을 갖는 item 반환
+        # (1) fold별 평균 계산 후 (2)유저별 높은 확률 값을 갖는 item 반환
         _s = np.array(self.fold_predict) #shape : (5,2억)
         _s = _s.mean(axis=0)
 
